@@ -1,5 +1,6 @@
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useAppSettings } from '../context/AppSettingsContext';
 import { extractYear } from '../lib/dateFormat';
 import { createPersonNode, createRelationEdge } from '../lib/diagram';
@@ -324,15 +325,6 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
       >
         <span style={plusGlyphStyle}>+</span>
       </Handle>
-      {siblingMenu?.side === 'left' && (
-        <div ref={menuRef} style={siblingMenuStyle(siblingMenu)} onClick={(e) => e.stopPropagation()}>
-          <MenuBtn icon={<SymbolChip symbol="male"   size={20} />} label="Brother"        onClick={() => addSibling('left', 'male')} />
-          <MenuBtn icon={<SymbolChip symbol="female" size={20} />} label="Sister"         onClick={() => addSibling('left', 'female')} />
-          <hr style={{ margin: '4px 6px', border: 'none', borderTop: '1px solid #e9ecef' }} />
-          <MenuBtn icon={<PartnerSymbolIcon sex="male" size={22} />} label="Partner male"   onClick={() => addSibling('left', 'male',   true)} />
-          <MenuBtn icon={<PartnerSymbolIcon sex="female" size={22} />} label="Partner female" onClick={() => addSibling('left', 'female', true)} />
-        </div>
-      )}
 
       {/* Right + : click shows sibling menu (add right sibling), drag to connect */}
       <Handle
@@ -350,15 +342,16 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
         <span style={plusGlyphStyle}>+</span>
       </Handle>
 
-      {/* Sibling popup – right side */}
-      {siblingMenu?.side === 'right' && (
+      {/* Sibling popups – rendered via portal so position:fixed works outside ReactFlow transforms */}
+      {siblingMenu && createPortal(
         <div ref={menuRef} style={siblingMenuStyle(siblingMenu)} onClick={(e) => e.stopPropagation()}>
-          <MenuBtn icon={<SymbolChip symbol="male"   size={20} />} label="Brother"        onClick={() => addSibling('right', 'male')} />
-          <MenuBtn icon={<SymbolChip symbol="female" size={20} />} label="Sister"         onClick={() => addSibling('right', 'female')} />
+          <MenuBtn icon={<SymbolChip symbol="male"   size={20} />} label="Brother"         onClick={() => addSibling(siblingMenu.side, 'male')} />
+          <MenuBtn icon={<SymbolChip symbol="female" size={20} />} label="Sister"          onClick={() => addSibling(siblingMenu.side, 'female')} />
           <hr style={{ margin: '4px 6px', border: 'none', borderTop: '1px solid #e9ecef' }} />
-          <MenuBtn icon={<PartnerSymbolIcon sex="male" size={22} />} label="Partner male"   onClick={() => addSibling('right', 'male',   true)} />
-          <MenuBtn icon={<PartnerSymbolIcon sex="female" size={22} />} label="Partner female" onClick={() => addSibling('right', 'female', true)} />
-        </div>
+          <MenuBtn icon={<PartnerSymbolIcon sex="male"   size={22} />} label="Partner male"   onClick={() => addSibling(siblingMenu.side, 'male',   true)} />
+          <MenuBtn icon={<PartnerSymbolIcon sex="female" size={22} />} label="Partner female" onClick={() => addSibling(siblingMenu.side, 'female', true)} />
+        </div>,
+        document.body
       )}
     </>
   ) : (

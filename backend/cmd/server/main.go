@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"genogram/backend/db/migrations"
 	"genogram/backend/internal/config"
 	"genogram/backend/internal/httpapi"
 	"genogram/backend/internal/store"
@@ -69,6 +70,11 @@ func initStore(cfg config.Config) (store.DiagramStore, func()) {
 		log.Printf("failed to connect DB, using in-memory store: %v", err)
 		return store.NewMemoryStore(), func() {}
 	}
+
+	if err := migrations.Run(ctx, pool); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
+	}
+	log.Println("migrations applied")
 
 	return store.NewPostgresStore(pool), func() { pool.Close() }
 }

@@ -21,7 +21,8 @@ import { notifications } from '@mantine/notifications';
 import { DetailsPanel } from './components/DetailsPanel';
 import { Palette } from './components/Palette';
 import { PersonNode } from './components/PersonNode';
-import { createDiagram, getDiagram, updateDiagram } from './api/client';
+import { createDiagram, getDiagram, listDiagrams, updateDiagram } from './api/client';
+import type { DiagramSummary } from './api/client';
 import { createPersonNode, createRelationEdge, relationStyle, updateEdgeRelation } from './lib/diagram';
 import { SYMBOL_DEFINITIONS, symbolToSex } from './lib/genogramSymbols';
 import { DATE_FORMAT_OPTIONS } from './lib/dateFormat';
@@ -48,7 +49,10 @@ export function App() {
   const [diagramName, setDiagramName] = useState('Family Diagram');
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
-  const [loadIdDraft, setLoadIdDraft] = useState('');
+  const [loadNameFilter, setLoadNameFilter] = useState('');
+  const [diagramList, setDiagramList] = useState<DiagramSummary[]>([]);
+  const [diagramListBusy, setDiagramListBusy] = useState(false);
+  const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
   const [newNameDraft, setNewNameDraft] = useState('Family Diagram');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -173,6 +177,25 @@ export function App() {
     },
     [edges, nodes, pushSnapshot, selectedEdgeId, setEdges]
   );
+
+  const fetchDiagramList = useCallback(async (filter: string) => {
+    setDiagramListBusy(true);
+    try {
+      const items = await listDiagrams(filter || undefined);
+      setDiagramList(items);
+    } catch (err) {
+      notifications.show({ color: 'red', message: `Failed to load diagram list: ${String(err)}` });
+    } finally {
+      setDiagramListBusy(false);
+    }
+  }, []);
+
+  const openLoadDialog = useCallback(() => {
+    setLoadNameFilter('');
+    setSelectedLoadId(null);
+    setLoadDialogOpen(true);
+    void fetchDiagramList('');
+  }, [fetchDiagramList]);
 
   const handleLoad = useCallback(async (id: string) => {
     if (!id) {
@@ -362,7 +385,7 @@ export function App() {
                 <Menu.Item leftSection={<IconFilePlus size={14} />} onClick={() => setNewDialogOpen(true)}>
                   New Diagram
                 </Menu.Item>
-                <Menu.Item leftSection={<IconFolderOpen size={14} />} onClick={() => setLoadDialogOpen(true)}>
+                <Menu.Item leftSection={<IconFolderOpen size={14} />} onClick={openLoadDialog}>
                   Load Existing Diagram
                 </Menu.Item>
                 <Menu.Divider />
@@ -501,18 +524,61 @@ export function App() {
         </Stack>
       </Modal>
 
-      <Modal opened={loadDialogOpen} onClose={() => setLoadDialogOpen(false)} title="Load Existing Diagram" centered>
+      <Modal opened={loadDialogOpen} onClose={() => setLoadDialogOpen(false)} title="Load Diagram" size="md" centered>
         <Stack>
-          <TextInput label="Diagram ID" value={loadIdDraft} onChange={(e) => setLoadIdDraft(e.currentTarget.value)} />
-          <Button
-            leftSection={<IconFolderOpen size={16} />}
-            onClick={async () => {
-              await handleLoad(loadIdDraft.trim());
-              setLoadDialogOpen(false);
+          <TextInput
+            label="Filter by name"
+            placeholder="Type to filter…"
+            value={loadNameFilter}
+            onChange={(e) => {
+              const v = e.currentTarget.value;
+              setLoadNameFilter(v);
+              void fetchDiagramList(v);
             }}
-          >
-            Load
-          </Button>
+          />
+          {diagramListBusy ? (
+            <Group justify="center" py="md"><Loader size="sm" /></Group>
+          ) : diagramList.length === 0 ? (
+            <Text size="sm" c="dimmed" ta="center" py="md">No diagrams found.</Text>
+          ) : (
+            <Stack gap={4} style={{ maxHeight: 320, overflowY: 'auto' }}>
+              {diagramList.map((d) => (
+                <div
+                  key={d.id}
+                  onClick={() => setSelectedLoadId(d.id)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    background: selectedLoadId === d.id ? '#e7f0ff' : 'transparent',
+                    border: selectedLoadId === d.id ? '1.5px solid #5c7cfa' : '1.5px solid transparent',
+                    transition: 'background 120ms',
+                  }}
+                  onDoubleClick={async () => {
+                    await handleLoad(d.id);
+                    setLoadDialogOpen(false);
+                  }}
+                >
+                  <Text size="sm" fw={500}>{d.name}</Text>
+                </div>
+              ))}
+            </Stack>
+          )}
+          <Group justify="flex-end" mt="xs">
+            <Button variant="default" onClick={() => setLoadDialogOpen(false)}>Cancel</Button>
+            <Button
+              leftSection={<IconFolderOpen size={16} />}
+              disabled={!selectedLoadId}
+              onClick={async () => {
+                if (selectedLoadId) {
+                  await handleLoad(selectedLoadId);
+                  setLoadDialogOpen(false);
+                }
+              }}
+            >
+              Load
+            </Button>
+          </Group>
         </Stack>
       </Modal>
 

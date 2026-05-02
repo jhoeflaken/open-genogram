@@ -65,3 +65,10 @@ type Diagram struct {
 	Edges     []Edge    `json:"edges"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
+
+// DiagramSummary is a lightweight projection used for listing diagrams.
+type DiagramSummary struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}

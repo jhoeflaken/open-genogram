@@ -10,6 +10,18 @@ async function expectJSON<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
+export interface DiagramSummary {
+  id: string;
+  name: string;
+  updatedAt: string;
+}
+
+export async function listDiagrams(nameFilter?: string): Promise<DiagramSummary[]> {
+  const params = nameFilter ? `?name=${encodeURIComponent(nameFilter)}` : '';
+  const res = await fetch(`${API_BASE}/diagrams${params}`);
+  return expectJSON<DiagramSummary[]>(res);
+}
+
 export async function createDiagram(diagram: Omit<Diagram, 'id'> & { id?: string }): Promise<Diagram> {
   const res = await fetch(`${API_BASE}/diagrams`, {
     method: 'POST',

@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -53,6 +55,21 @@ func (s *MemoryStore) UpdateDiagram(_ context.Context, id string, diagram model.
 	diagram.UpdatedAt = time.Now().UTC()
 	s.diagrams[id] = diagram
 	return diagram, nil
+}
+
+func (s *MemoryStore) ListDiagrams(_ context.Context, nameFilter string) ([]model.DiagramSummary, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	filter := strings.ToLower(nameFilter)
+	out := make([]model.DiagramSummary, 0, len(s.diagrams))
+	for _, d := range s.diagrams {
+		if filter == "" || strings.Contains(strings.ToLower(d.Name), filter) {
+			out = append(out, model.DiagramSummary{ID: d.ID, Name: d.Name, UpdatedAt: d.UpdatedAt})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
+	return out, nil
 }
 
 func (s *MemoryStore) GetPerson(ctx context.Context, diagramID, personID string) (model.PersonData, error) {

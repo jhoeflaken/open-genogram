@@ -77,6 +77,29 @@ func (s *PostgresStore) UpdateDiagram(ctx context.Context, id string, diagram mo
 	return diagram, nil
 }
 
+func (s *PostgresStore) ListDiagrams(ctx context.Context, nameFilter string) ([]model.DiagramSummary, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, name, updated_at FROM diagrams
+		 WHERE ($1 = '' OR name ILIKE '%' || $1 || '%')
+		 ORDER BY updated_at DESC`,
+		nameFilter,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.DiagramSummary
+	for rows.Next() {
+		var s model.DiagramSummary
+		if err := rows.Scan(&s.ID, &s.Name, &s.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
 func (s *PostgresStore) GetPerson(ctx context.Context, diagramID, personID string) (model.PersonData, error) {
 	d, err := s.GetDiagram(ctx, diagramID)
 	if err != nil {
