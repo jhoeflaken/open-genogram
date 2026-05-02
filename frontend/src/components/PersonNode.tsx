@@ -70,12 +70,12 @@ function MenuBtn({ icon, label, onClick }: { icon: ReactNode; label: string; onC
   );
 }
 
-function siblingMenuStyle(side: 'left' | 'right'): CSSProperties {
+function siblingMenuStyle(anchor: { side: 'left' | 'right'; x: number; y: number }): CSSProperties {
   return {
-    position: 'absolute',
-    top: '50%',
-    ...(side === 'left' ? { right: '100%', marginRight: 8 } : { left: '100%', marginLeft: 8 }),
-    transform: 'translateY(-50%)',
+    position: 'fixed',
+    top: anchor.y,
+    left: anchor.side === 'left' ? anchor.x - 8 : anchor.x + 8,
+    transform: anchor.side === 'left' ? 'translate(-100%, -50%)' : 'translate(0, -50%)',
     background: '#fff',
     border: '1.5px solid #bfcbff',
     borderRadius: 8,
@@ -84,7 +84,7 @@ function siblingMenuStyle(side: 'left' | 'right'): CSSProperties {
     display: 'flex',
     flexDirection: 'column',
     gap: 4,
-    zIndex: 10000,
+    zIndex: 2147483647,
     minWidth: 102,
   };
 }
@@ -106,7 +106,7 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
   const reactFlow = useReactFlow<PersonFlowNode, RelationEdge>();
   const { pushSnapshot } = useHistory();
   const { dateFormat } = useAppSettings();
-  const [siblingMenu, setSiblingMenu] = useState<'left' | 'right' | null>(null);
+  const [siblingMenu, setSiblingMenu] = useState<{ side: 'left' | 'right'; x: number; y: number } | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const isDeceased = data.deceased || data.symbol === 'stillbirth';
   const birthYear = extractYear(data.birthDate, dateFormat);
@@ -316,12 +316,16 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
         position={Position.Left}
         className="action-handle"
         style={{ ...actionHandleBase, left: 0, transform: 'translate(-50%, -50%)' }}
-        onClick={(e) => { e.stopPropagation(); setSiblingMenu((prev) => prev === 'left' ? null : 'left'); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          const next = { side: 'left' as const, x: e.clientX, y: e.clientY };
+          setSiblingMenu((prev) => (prev?.side === 'left' ? null : next));
+        }}
       >
         <span style={plusGlyphStyle}>+</span>
       </Handle>
-      {siblingMenu === 'left' && (
-        <div ref={menuRef} style={siblingMenuStyle('left')} onClick={(e) => e.stopPropagation()}>
+      {siblingMenu?.side === 'left' && (
+        <div ref={menuRef} style={siblingMenuStyle(siblingMenu)} onClick={(e) => e.stopPropagation()}>
           <MenuBtn icon={<SymbolChip symbol="male"   size={20} />} label="Brother"        onClick={() => addSibling('left', 'male')} />
           <MenuBtn icon={<SymbolChip symbol="female" size={20} />} label="Sister"         onClick={() => addSibling('left', 'female')} />
           <hr style={{ margin: '4px 6px', border: 'none', borderTop: '1px solid #e9ecef' }} />
@@ -337,14 +341,18 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
         position={Position.Right}
         className="action-handle"
         style={{ ...actionHandleBase, right: 0, transform: 'translate(50%, -50%)' }}
-        onClick={(e) => { e.stopPropagation(); setSiblingMenu((prev) => prev === 'right' ? null : 'right'); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          const next = { side: 'right' as const, x: e.clientX, y: e.clientY };
+          setSiblingMenu((prev) => (prev?.side === 'right' ? null : next));
+        }}
       >
         <span style={plusGlyphStyle}>+</span>
       </Handle>
 
       {/* Sibling popup – right side */}
-      {siblingMenu === 'right' && (
-        <div ref={menuRef} style={siblingMenuStyle('right')} onClick={(e) => e.stopPropagation()}>
+      {siblingMenu?.side === 'right' && (
+        <div ref={menuRef} style={siblingMenuStyle(siblingMenu)} onClick={(e) => e.stopPropagation()}>
           <MenuBtn icon={<SymbolChip symbol="male"   size={20} />} label="Brother"        onClick={() => addSibling('right', 'male')} />
           <MenuBtn icon={<SymbolChip symbol="female" size={20} />} label="Sister"         onClick={() => addSibling('right', 'female')} />
           <hr style={{ margin: '4px 6px', border: 'none', borderTop: '1px solid #e9ecef' }} />

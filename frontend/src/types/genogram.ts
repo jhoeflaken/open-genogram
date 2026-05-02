@@ -5,10 +5,10 @@ export type PersonSymbol = 'male' | 'female' | 'unknown' | 'pregnancy' | 'stillb
 export type RelationType = 'partner' | 'divorce' | 'parent-child' | 'adoption';
 
 export type PersonNodeData = {
-  uid: string;
+  uid?: string;
   name: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
   sex: Sex;
   symbol: PersonSymbol;
   birthDate?: string;

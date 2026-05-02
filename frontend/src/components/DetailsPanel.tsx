@@ -49,10 +49,10 @@ export function DetailsPanel({ node, edge, onNodeChange, onEdgeRelationChange }:
   return (
     <Stack p="sm" gap="sm" style={{ borderLeft: '1px solid #e9ecef', height: '100%', overflowY: 'auto' }}>
       <Title order={5}>Person Details</Title>
-      <TextInput label="UID" value={node.data.uid} readOnly />
+      <TextInput label="UID" value={node.data.uid ?? ''} readOnly />
       <TextInput
         label="First Name"
-        value={node.data.firstName}
+        value={node.data.firstName ?? ''}
         onChange={(e) => {
           const firstName = e.currentTarget.value;
           const lastName = node.data.lastName ?? '';
@@ -61,7 +61,7 @@ export function DetailsPanel({ node, edge, onNodeChange, onEdgeRelationChange }:
       />
       <TextInput
         label="Last Name"
-        value={node.data.lastName}
+        value={node.data.lastName ?? ''}
         onChange={(e) => {
           const lastName = e.currentTarget.value;
           const firstName = node.data.firstName ?? '';

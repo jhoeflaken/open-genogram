@@ -147,7 +147,16 @@ export function App() {
       setNodes((prev) =>
         prev.map((n) => {
           if (n.id !== selectedNodeId) return n;
-          const nextData = { ...n.data, ...patch };
+          const firstName = patch.firstName ?? n.data.firstName ?? n.data.name?.split(' ')[0] ?? '';
+          const lastName = patch.lastName ?? n.data.lastName ?? n.data.name?.split(' ').slice(1).join(' ') ?? '';
+          const nextData = {
+            ...n.data,
+            uid: n.data.uid ?? crypto.randomUUID(),
+            ...patch,
+            firstName,
+            lastName,
+            name: `${firstName} ${lastName}`.trim() || n.data.name,
+          };
           if (patch.symbol) nextData.sex = symbolToSex(patch.symbol);
           return { ...n, data: nextData };
         })
@@ -338,7 +347,7 @@ export function App() {
   return (
     <AppShell
       header={{ height: 64 }}
-      navbar={{ width: 235, breakpoint: 'sm' }}
+      navbar={{ width: 210, breakpoint: 'sm' }}
       aside={{ width: 340, breakpoint: 'sm' }}
       padding={0}
     >

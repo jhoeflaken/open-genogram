@@ -13,7 +13,7 @@ type Config struct {
 func Load() Config {
 	cfg := Config{
 		Port:       getEnv("PORT", "8080"),
-		DBDSN:      os.Getenv("DB_DSN"),
+		DBDSN:      getEnv("DB_DSN", "postgres://genogram:genogram@localhost:5432/genogram?sslmode=disable"),
 		CORSOrigin: getEnv("CORS_ORIGIN", "http://localhost:5173"),
 	}
 	return cfg
