@@ -13,10 +13,28 @@ import {
   type NodeMouseHandler,
   type ReactFlowInstance,
   type NodeTypes,
-  type OnSelectionChangeParams
+  type OnSelectionChangeParams,
+  type XYPosition
 } from '@xyflow/react';
 import { ActionIcon, AppShell, Button, Divider, Group, Loader, Menu, Modal, Select, Stack, Text, TextInput, Title, Tooltip } from '@mantine/core';
-import { IconArrowBackUp, IconArrowForwardUp, IconChevronDown, IconDeviceFloppy, IconFilePlus, IconFolderOpen, IconSettings, IconTrash } from '@tabler/icons-react';
+import {
+  IconArrowBackUp,
+  IconArrowForwardUp,
+  IconArrowsHorizontal,
+  IconArrowsVertical,
+  IconChevronDown,
+  IconDeviceFloppy,
+  IconFilePlus,
+  IconFolderOpen,
+  IconHandMove,
+  IconLayoutAlignBottom,
+  IconLayoutAlignLeft,
+  IconLayoutAlignRight,
+  IconLayoutAlignTop,
+  IconPointer,
+  IconSettings,
+  IconTrash
+} from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { DetailsPanel } from './components/DetailsPanel';
 import { Palette } from './components/Palette';
@@ -55,7 +73,9 @@ export function App() {
   const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
   const [newNameDraft, setNewNameDraft] = useState('Family Diagram');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [interactionMode, setInteractionMode] = useState<'select' | 'move'>('select');
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance<PersonFlowNode, Edge<RelationEdgeData>> | null>(null);
   const [nodeDialogOpen, setNodeDialogOpen] = useState(false);
   const [newFirstName, setNewFirstName] = useState('');
@@ -67,6 +87,7 @@ export function App() {
 
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
   const selectedEdge = useMemo(() => edges.find((e) => e.id === selectedEdgeId) ?? null, [edges, selectedEdgeId]);
+  const selectedNodes = useMemo(() => nodes.filter((n) => selectedNodeIds.includes(n.id)), [nodes, selectedNodeIds]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -103,9 +124,53 @@ export function App() {
   );
 
   const onSelectionChange = useCallback((selection: OnSelectionChangeParams) => {
+    setSelectedNodeIds(selection.nodes.map((n) => n.id));
     setSelectedNodeId(selection.nodes[0]?.id ?? null);
     setSelectedEdgeId(selection.edges[0]?.id ?? null);
   }, []);
+
+  const applySelectedNodePositions = useCallback((nextById: Record<string, XYPosition>) => {
+    pushSnapshot(nodes, edges);
+    setNodes((prev) => prev.map((n) => (nextById[n.id] ? { ...n, position: nextById[n.id] } : n)));
+  }, [edges, nodes, pushSnapshot, setNodes]);
+
+  const alignSelectedNodes = useCallback((dir: 'left' | 'right' | 'top' | 'bottom') => {
+    if (selectedNodes.length < 2) return;
+    const xs = selectedNodes.map((n) => n.position.x);
+    const ys = selectedNodes.map((n) => n.position.y);
+    const targetX = dir === 'left' ? Math.min(...xs) : Math.max(...xs);
+    const targetY = dir === 'top' ? Math.min(...ys) : Math.max(...ys);
+
+    const nextById: Record<string, XYPosition> = {};
+    selectedNodes.forEach((n) => {
+      nextById[n.id] = {
+        x: dir === 'left' || dir === 'right' ? targetX : n.position.x,
+        y: dir === 'top' || dir === 'bottom' ? targetY : n.position.y,
+      };
+    });
+    applySelectedNodePositions(nextById);
+  }, [applySelectedNodePositions, selectedNodes]);
+
+  const distributeSelectedNodes = useCallback((axis: 'horizontal' | 'vertical') => {
+    if (selectedNodes.length < 3) return;
+    const sorted = [...selectedNodes].sort((a, b) => (axis === 'horizontal'
+      ? a.position.x - b.position.x
+      : a.position.y - b.position.y));
+
+    const first = axis === 'horizontal' ? sorted[0].position.x : sorted[0].position.y;
+    const last = axis === 'horizontal'
+      ? sorted[sorted.length - 1].position.x
+      : sorted[sorted.length - 1].position.y;
+    const step = (last - first) / (sorted.length - 1);
+
+    const nextById: Record<string, XYPosition> = {};
+    sorted.forEach((n, idx) => {
+      nextById[n.id] = axis === 'horizontal'
+        ? { x: first + step * idx, y: n.position.y }
+        : { x: n.position.x, y: first + step * idx };
+    });
+    applySelectedNodePositions(nextById);
+  }, [applySelectedNodePositions, selectedNodes]);
 
   useEffect(() => {
     const onStartRelation = (event: Event) => {
@@ -138,6 +203,7 @@ export function App() {
       setNodes((prev) => prev.filter((node) => node.id !== nodeID));
       setEdges((prev) => prev.filter((edge) => edge.source !== nodeID && edge.target !== nodeID));
       if (selectedNodeId === nodeID) setSelectedNodeId(null);
+      setSelectedNodeIds((prev) => prev.filter((id) => id !== nodeID));
       setSelectedEdgeId(null);
       setContextMenu(null);
     },
@@ -233,6 +299,7 @@ export function App() {
       setDiagramName(loaded.name);
       setDiagramId(loaded.id);
       setSelectedNodeId(null);
+      setSelectedNodeIds([]);
       setSelectedEdgeId(null);
       notifications.show({ color: 'green', message: 'Diagram loaded.' });
     } catch (err) {
@@ -273,6 +340,7 @@ export function App() {
     setDiagramId('');
     setDiagramName(newNameDraft.trim() || 'Family Diagram');
     setSelectedNodeId(null);
+    setSelectedNodeIds([]);
     setSelectedEdgeId(null);
     setNewDialogOpen(false);
   }, [newNameDraft, setEdges, setNodes]);
@@ -308,6 +376,7 @@ export function App() {
   const handleNodeContextMenu: NodeMouseHandler<PersonFlowNode> = useCallback((event, node) => {
     event.preventDefault();
     setSelectedNodeId(node.id);
+    setSelectedNodeIds([node.id]);
     setSelectedEdgeId(null);
     setContextMenu({
       nodeId: node.id,
@@ -353,19 +422,45 @@ export function App() {
 
       // Delete
       if (event.key === 'Delete') {
-        if (selectedNodeId) {
+        if (selectedNodeIds.length > 1) {
+          pushSnapshot(nodes, edges);
+          const ids = new Set(selectedNodeIds);
+          setNodes((prev) => prev.filter((n) => !ids.has(n.id)));
+          setEdges((prev) => prev.filter((e) => !ids.has(e.source) && !ids.has(e.target)));
+          setSelectedNodeId(null);
+          setSelectedNodeIds([]);
+          setSelectedEdgeId(null);
+        } else if (selectedNodeId) {
           removeNodeByID(selectedNodeId);
         } else if (selectedEdgeId) {
           pushSnapshot(nodes, edges);
           setEdges((prev) => prev.filter((e) => e.id !== selectedEdgeId));
           setSelectedEdgeId(null);
         }
+        return;
+      }
+
+      if (!reactFlowInstance) return;
+      const step = event.shiftKey ? 120 : 80;
+      const viewport = reactFlowInstance.getViewport();
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        void reactFlowInstance.setViewport({ ...viewport, x: viewport.x + step });
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        void reactFlowInstance.setViewport({ ...viewport, x: viewport.x - step });
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        void reactFlowInstance.setViewport({ ...viewport, y: viewport.y + step });
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        void reactFlowInstance.setViewport({ ...viewport, y: viewport.y - step });
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [edges, nodes, pushSnapshot, redo, removeNodeByID, selectedEdgeId, selectedNodeId, setEdges, undo]);
+  }, [edges, nodes, pushSnapshot, reactFlowInstance, redo, removeNodeByID, selectedEdgeId, selectedNodeId, selectedNodeIds, setEdges, setNodes, undo]);
 
   return (
     <AppShell
@@ -416,6 +511,25 @@ export function App() {
               </ActionIcon>
             </Tooltip>
             <Divider orientation="vertical" mx={4} />
+            <Tooltip label="Move mode (pan by drag)">
+              <ActionIcon
+                variant={interactionMode === 'move' ? 'filled' : 'subtle'}
+                aria-label="Move mode"
+                onClick={() => setInteractionMode('move')}
+              >
+                <IconHandMove size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Selection mode (click/drag-select)">
+              <ActionIcon
+                variant={interactionMode === 'select' ? 'filled' : 'subtle'}
+                aria-label="Selection mode"
+                onClick={() => setInteractionMode('select')}
+              >
+                <IconPointer size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Divider orientation="vertical" mx={4} />
             <Tooltip label="Undo (Ctrl+Z)">
               <ActionIcon variant="subtle" aria-label="Undo" disabled={!canUndo} onClick={undo}>
                 <IconArrowBackUp size={18} />
@@ -424,6 +538,37 @@ export function App() {
             <Tooltip label="Redo (Ctrl+Y)">
               <ActionIcon variant="subtle" aria-label="Redo" disabled={!canRedo} onClick={redo}>
                 <IconArrowForwardUp size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Divider orientation="vertical" mx={4} />
+            <Tooltip label="Align left">
+              <ActionIcon variant="subtle" aria-label="Align left" disabled={selectedNodeIds.length < 2} onClick={() => alignSelectedNodes('left')}>
+                <IconLayoutAlignLeft size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Align top">
+              <ActionIcon variant="subtle" aria-label="Align top" disabled={selectedNodeIds.length < 2} onClick={() => alignSelectedNodes('top')}>
+                <IconLayoutAlignTop size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Align bottom">
+              <ActionIcon variant="subtle" aria-label="Align bottom" disabled={selectedNodeIds.length < 2} onClick={() => alignSelectedNodes('bottom')}>
+                <IconLayoutAlignBottom size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Align right">
+              <ActionIcon variant="subtle" aria-label="Align right" disabled={selectedNodeIds.length < 2} onClick={() => alignSelectedNodes('right')}>
+                <IconLayoutAlignRight size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Distribute horizontally">
+              <ActionIcon variant="subtle" aria-label="Distribute horizontally" disabled={selectedNodeIds.length < 3} onClick={() => distributeSelectedNodes('horizontal')}>
+                <IconArrowsHorizontal size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Distribute vertically">
+              <ActionIcon variant="subtle" aria-label="Distribute vertically" disabled={selectedNodeIds.length < 3} onClick={() => distributeSelectedNodes('vertical')}>
+                <IconArrowsVertical size={18} />
               </ActionIcon>
             </Tooltip>
           </Group>
@@ -435,6 +580,12 @@ export function App() {
             onInit={setReactFlowInstance}
             fitView
             deleteKeyCode={null}
+            multiSelectionKeyCode={['Control', 'Meta', 'Shift']}
+            elementsSelectable
+            selectionOnDrag={interactionMode === 'select'}
+            nodesDraggable={interactionMode === 'select'}
+            panOnDrag={interactionMode === 'move'}
+            panOnScroll={interactionMode === 'move'}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
