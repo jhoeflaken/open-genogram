@@ -24,3 +24,55 @@ export function extractYear(dateStr: string | undefined, format: DateFormat): st
   }
 }
 
+function toValidUTCDate(year: number, month: number, day: number): Date | null {
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) return null;
+  return d;
+}
+
+// Parses a configured date string (or plain yyyy) into a UTC date.
+export function parseConfiguredDate(dateStr: string | undefined, format: DateFormat): Date | null {
+  if (!dateStr?.trim()) return null;
+  const parts = dateStr.trim().split('-');
+
+  if (parts.length === 1 && /^\d{4}$/.test(parts[0])) {
+    return toValidUTCDate(Number(parts[0]), 1, 1);
+  }
+  if (parts.length !== 3) return null;
+
+  let day = 0;
+  let month = 0;
+  let year = 0;
+
+  switch (format) {
+    case 'yyyy-MM-dd':
+      year = Number(parts[0]);
+      month = Number(parts[1]);
+      day = Number(parts[2]);
+      break;
+    case 'dd-MM-yyyy':
+      day = Number(parts[0]);
+      month = Number(parts[1]);
+      year = Number(parts[2]);
+      break;
+    case 'MM-dd-yyyy':
+      month = Number(parts[0]);
+      day = Number(parts[1]);
+      year = Number(parts[2]);
+      break;
+  }
+
+  return toValidUTCDate(year, month, day);
+}
+
+export function calculateAgeInYears(startDate: Date, endDate: Date): number | null {
+  if (endDate.getTime() < startDate.getTime()) return null;
+  let age = endDate.getUTCFullYear() - startDate.getUTCFullYear();
+  const monthDelta = endDate.getUTCMonth() - startDate.getUTCMonth();
+  const dayDelta = endDate.getUTCDate() - startDate.getUTCDate();
+  if (monthDelta < 0 || (monthDelta === 0 && dayDelta < 0)) age -= 1;
+  return age < 0 ? null : age;
+}
+

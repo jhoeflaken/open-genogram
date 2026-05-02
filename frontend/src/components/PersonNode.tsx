@@ -2,11 +2,11 @@ import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppSettings } from '../context/AppSettingsContext';
-import { extractYear } from '../lib/dateFormat';
+import { calculateAgeInYears, extractYear, parseConfiguredDate } from '../lib/dateFormat';
 import { createPersonNode, createRelationEdge } from '../lib/diagram';
 import { useHistory } from '../context/HistoryContext';
 import { PartnerSymbolIcon, SymbolChip, SymbolIcon } from './SymbolIcons';
-import type { PersonFlowNode, PersonSymbol, RelationEdge } from '../types/genogram';
+import type { PersonFlowNode, RelationEdge } from '../types/genogram';
 
 // ── name formatting ───────────────────────────────────────────────────────────
 const THREE_LINE_CHARS = 42;
@@ -113,6 +113,13 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
   const birthYear = extractYear(data.birthDate, dateFormat);
   const deathYear = extractYear(data.deathDate, dateFormat);
   const displayName = formatNodeName(data.firstName ?? '', data.lastName ?? '');
+  const birthDate = parseConfiguredDate(data.birthDate, dateFormat);
+  const deathDate = parseConfiguredDate(data.deathDate, dateFormat);
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const referenceDate = isDeceased ? deathDate : today;
+  const ageYears = birthDate && referenceDate ? calculateAgeInYears(birthDate, referenceDate) : null;
+  const ageLabel = ageYears !== null ? `${ageYears}y` : '';
 
   const card: CSSProperties = {
     background: 'linear-gradient(160deg, #ffffff 0%, #eef2ff 100%)',
@@ -152,6 +159,24 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
   const datesStyle: CSSProperties = {
     display: 'flex', gap: 8, marginTop: 3,
     flexWrap: 'nowrap', overflow: 'hidden', height: 16, alignItems: 'center',
+  };
+
+  const symbolColumnStyle: CSSProperties = {
+    flexShrink: 0,
+    width: 58,
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  };
+
+  const ageStyle: CSSProperties = {
+    fontSize: 14,
+    fontWeight: 600,
+    lineHeight: 1,
+    color: '#1a1a2e',
   };
 
   const isPrimarySymbol = data.symbol === 'male' || data.symbol === 'female' || data.symbol === 'unknown';
@@ -365,9 +390,12 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
     <div style={card} onClick={() => setSiblingMenu(null)}>
       {handles}
 
-      {/* left: genogram symbol */}
-      <div style={{ flexShrink: 0, lineHeight: 0 }}>
-        <SymbolIcon symbol={data.symbol} deceased={isDeceased} />
+      {/* left: centered symbol + computed age */}
+      <div style={symbolColumnStyle}>
+        <div style={{ lineHeight: 0 }}>
+          <SymbolIcon symbol={data.symbol} deceased={isDeceased} />
+        </div>
+        {ageLabel && <div style={ageStyle}>{ageLabel}</div>}
       </div>
 
       {/* right: name + dates */}
