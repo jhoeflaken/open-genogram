@@ -25,8 +25,12 @@ type Position struct {
 }
 
 type PersonData struct {
+	UID       string `json:"uid,omitempty"`
+	FirstName string `json:"firstName,omitempty"`
+	LastName  string `json:"lastName,omitempty"`
 	Name      string `json:"name"`
 	Sex       Sex    `json:"sex"`
+	Symbol    string `json:"symbol,omitempty"`
 	BirthDate string `json:"birthDate,omitempty"`
 	DeathDate string `json:"deathDate,omitempty"`
 	Deceased  bool   `json:"deceased"`
@@ -45,11 +49,13 @@ type EdgeData struct {
 }
 
 type Edge struct {
-	ID     string   `json:"id"`
-	Type   string   `json:"type"`
-	Source string   `json:"source"`
-	Target string   `json:"target"`
-	Data   EdgeData `json:"data"`
+	ID           string   `json:"id"`
+	Type         string   `json:"type"`
+	Source       string   `json:"source"`
+	Target       string   `json:"target"`
+	SourceHandle string   `json:"sourceHandle,omitempty"`
+	TargetHandle string   `json:"targetHandle,omitempty"`
+	Data         EdgeData `json:"data"`
 }
 
 type Diagram struct {

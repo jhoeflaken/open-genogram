@@ -1,9 +1,11 @@
 import { Checkbox, Select, Stack, Text, TextInput, Textarea, Title } from '@mantine/core';
-import type { Edge, Node } from '@xyflow/react';
-import type { PersonNodeData, RelationEdgeData, RelationType } from '../types/genogram';
+import type { Edge } from '@xyflow/react';
+import { useAppSettings } from '../context/AppSettingsContext';
+import { SYMBOL_DEFINITIONS } from '../lib/genogramSymbols';
+import type { PersonFlowNode, PersonNodeData, RelationEdgeData, RelationType } from '../types/genogram';
 
 type DetailsPanelProps = {
-  node: Node<PersonNodeData> | null;
+  node: PersonFlowNode | null;
   edge: Edge<RelationEdgeData> | null;
   onNodeChange: (patch: Partial<PersonNodeData>) => void;
   onEdgeRelationChange: (relation: RelationType) => void;
@@ -17,6 +19,7 @@ const relationOptions = [
 ];
 
 export function DetailsPanel({ node, edge, onNodeChange, onEdgeRelationChange }: DetailsPanelProps) {
+  const { dateFormat } = useAppSettings();
   if (edge) {
     return (
       <Stack p="sm" gap="sm" style={{ borderLeft: '1px solid #e9ecef', height: '100%' }}>
@@ -46,7 +49,33 @@ export function DetailsPanel({ node, edge, onNodeChange, onEdgeRelationChange }:
   return (
     <Stack p="sm" gap="sm" style={{ borderLeft: '1px solid #e9ecef', height: '100%', overflowY: 'auto' }}>
       <Title order={5}>Person Details</Title>
-      <TextInput label="Name" value={node.data.name} onChange={(e) => onNodeChange({ name: e.currentTarget.value })} />
+      <TextInput label="UID" value={node.data.uid} readOnly />
+      <TextInput
+        label="First Name"
+        value={node.data.firstName}
+        onChange={(e) => {
+          const firstName = e.currentTarget.value;
+          const lastName = node.data.lastName ?? '';
+          onNodeChange({ firstName, name: `${firstName} ${lastName}`.trim() });
+        }}
+      />
+      <TextInput
+        label="Last Name"
+        value={node.data.lastName}
+        onChange={(e) => {
+          const lastName = e.currentTarget.value;
+          const firstName = node.data.firstName ?? '';
+          onNodeChange({ lastName, name: `${firstName} ${lastName}`.trim() });
+        }}
+      />
+      <Select
+        label="Symbol"
+        data={SYMBOL_DEFINITIONS.map((item) => ({ value: item.symbol, label: item.label }))}
+        value={node.data.symbol}
+        onChange={(v) => {
+          if (v) onNodeChange({ symbol: v as PersonNodeData['symbol'] });
+        }}
+      />
       <Select
         label="Sex"
         data={[
@@ -61,15 +90,19 @@ export function DetailsPanel({ node, edge, onNodeChange, onEdgeRelationChange }:
       />
       <TextInput
         label="Birth Date"
-        placeholder="YYYY-MM-DD"
+        placeholder={dateFormat}
         value={node.data.birthDate ?? ''}
         onChange={(e) => onNodeChange({ birthDate: e.currentTarget.value })}
       />
       <TextInput
         label="Death Date"
-        placeholder="YYYY-MM-DD"
+        placeholder={dateFormat}
         value={node.data.deathDate ?? ''}
-        onChange={(e) => onNodeChange({ deathDate: e.currentTarget.value })}
+        onChange={(e) => {
+          const deathDate = e.currentTarget.value;
+          // entering any death date automatically marks the person as deceased
+          onNodeChange({ deathDate, ...(deathDate.trim() ? { deceased: true } : {}) });
+        }}
       />
       <Checkbox checked={node.data.deceased} label="Deceased" onChange={(e) => onNodeChange({ deceased: e.currentTarget.checked })} />
       <Textarea

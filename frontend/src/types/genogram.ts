@@ -1,11 +1,16 @@
 import type { Edge, Node } from '@xyflow/react';
 
 export type Sex = 'male' | 'female' | 'unknown';
+export type PersonSymbol = 'male' | 'female' | 'unknown' | 'pregnancy' | 'stillbirth' | 'miscarriage' | 'abortion' | 'pet';
 export type RelationType = 'partner' | 'divorce' | 'parent-child' | 'adoption';
 
 export type PersonNodeData = {
+  uid: string;
   name: string;
+  firstName: string;
+  lastName: string;
   sex: Sex;
+  symbol: PersonSymbol;
   birthDate?: string;
   deathDate?: string;
   deceased: boolean;

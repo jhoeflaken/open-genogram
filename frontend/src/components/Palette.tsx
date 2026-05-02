@@ -1,19 +1,47 @@
-import { Button, Stack, Text, Title } from '@mantine/core';
-import type { Sex } from '../types/genogram';
+import { Button, Group, SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import type { DragEvent } from 'react';
+import { SymbolIcon } from './SymbolIcons';
+import { SYMBOL_DEFINITIONS } from '../lib/genogramSymbols';
+import type { PersonSymbol } from '../types/genogram';
 
 type PaletteProps = {
-  onAddPerson: (sex: Sex) => void;
+  onAddPerson: (symbol: PersonSymbol) => void;
 };
 
 export function Palette({ onAddPerson }: PaletteProps) {
+  const handleDragStart = (event: DragEvent<HTMLButtonElement>, symbol: PersonSymbol) => {
+    event.dataTransfer.setData('application/genogram-symbol', symbol);
+    event.dataTransfer.effectAllowed = 'copy';
+  };
+
   return (
-    <Stack p="sm" gap="sm" style={{ borderRight: '1px solid #e9ecef', height: '100%' }}>
+    <Stack p="xs" gap="xs" style={{ borderRight: '1px solid #e9ecef', height: '100%', overflowY: 'auto' }}>
       <Title order={5}>Palette</Title>
-      <Text size="sm" c="dimmed">McGoldrick &amp; Gerson symbols</Text>
-      <Button variant="light" onClick={() => onAddPerson('male')}>Add Male (Square)</Button>
-      <Button variant="light" onClick={() => onAddPerson('female')}>Add Female (Circle)</Button>
-      <Button variant="light" onClick={() => onAddPerson('unknown')}>Add Unknown (Diamond)</Button>
+      <SimpleGrid cols={1} spacing="xs">
+        {SYMBOL_DEFINITIONS.map((item) => (
+          <Button
+            key={item.symbol}
+            variant="light"
+            h={42}
+            fullWidth
+            draggable
+            onDragStart={(event) => handleDragStart(event, item.symbol)}
+            onClick={() => onAddPerson(item.symbol)}
+            styles={{
+              inner: {
+                justifyContent: 'flex-start'
+              }
+            }}
+          >
+            <Group gap="sm" wrap="nowrap" style={{ width: '100%', justifyContent: 'flex-start', alignItems: 'center' }}>
+              <span style={{ width: 28, minWidth: 28, display: 'inline-flex', justifyContent: 'center', alignItems: 'center' }}>
+                <SymbolIcon symbol={item.symbol} size={26} />
+              </span>
+              <Text fw={600} size="sm" ta="left" style={{ whiteSpace: 'nowrap' }}>{item.label}</Text>
+            </Group>
+          </Button>
+        ))}
+      </SimpleGrid>
     </Stack>
   );
 }
-

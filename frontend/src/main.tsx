@@ -7,13 +7,19 @@ import '@mantine/notifications/styles.css';
 import '@xyflow/react/dist/style.css';
 import './styles.css';
 import { App } from './App';
+import { AppSettingsProvider } from './context/AppSettingsContext';
+import { HistoryProvider } from './context/HistoryContext';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <MantineProvider>
-      <Notifications />
-      <App />
-    </MantineProvider>
+    <HistoryProvider>
+      <AppSettingsProvider>
+        <MantineProvider>
+          <Notifications />
+          <App />
+        </MantineProvider>
+      </AppSettingsProvider>
+    </HistoryProvider>
   </React.StrictMode>
 );
 

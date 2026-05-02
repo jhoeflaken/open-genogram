@@ -1,49 +1,400 @@
-import { Box, Text } from '@mantine/core';
-import type { NodeProps } from '@xyflow/react';
-import type { PersonFlowNode } from '../types/genogram';
+import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useAppSettings } from '../context/AppSettingsContext';
+import { extractYear } from '../lib/dateFormat';
+import { createPersonNode, createRelationEdge } from '../lib/diagram';
+import { useHistory } from '../context/HistoryContext';
+import { PartnerSymbolIcon, SymbolChip, SymbolIcon } from './SymbolIcons';
+import type { PersonFlowNode, PersonSymbol, RelationEdge } from '../types/genogram';
 
-export function PersonNode({ data, selected }: NodeProps<PersonFlowNode>) {
-  const shared = {
-    border: selected ? '2px solid #228be6' : '2px solid #1f1f1f',
-    backgroundColor: '#fff',
-    display: 'grid',
-    placeItems: 'center',
-    color: '#1f1f1f',
-    position: 'relative' as const
-  };
+// ── name formatting ───────────────────────────────────────────────────────────
+const THREE_LINE_CHARS = 42;
 
-  const label = (
-    <Text size="xs" style={{ position: 'absolute', top: '110%', whiteSpace: 'nowrap' }}>
-      {data.name || 'Unnamed person'}
-    </Text>
-  );
+function formatNodeName(firstName: string, lastName: string): string {
+  const full = [firstName, lastName].filter(Boolean).join(' ');
+  if (full.length <= THREE_LINE_CHARS) return full;
 
-  if (data.sex === 'female') {
-    return (
-      <Box style={{ ...shared, width: 72, height: 72, borderRadius: '999px' }}>
-        {data.deceased && <Box style={{ position: 'absolute', width: 84, borderTop: '2px solid #e03131', transform: 'rotate(45deg)' }} />}
-        {label}
-      </Box>
-    );
-  }
+  const parts = firstName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return full;
 
-  if (data.sex === 'unknown') {
-    return (
-      <Box style={{ ...shared, width: 64, height: 64, transform: 'rotate(45deg)' }}>
-        <Box style={{ transform: 'rotate(-45deg)' }}>
-          {data.deceased && <Box style={{ position: 'absolute', width: 84, borderTop: '2px solid #e03131', transform: 'rotate(45deg)' }} />}
-          {label}
-        </Box>
-      </Box>
-    );
-  }
-
-  return (
-    <Box style={{ ...shared, width: 72, height: 72 }}>
-      {data.deceased && <Box style={{ position: 'absolute', width: 84, borderTop: '2px solid #e03131', transform: 'rotate(45deg)' }} />}
-      {label}
-    </Box>
-  );
+  const firstWord = parts[0];
+  const otherInitials = parts.slice(1).map((p) => p.charAt(0).toUpperCase() + '.').join(' ');
+  return [firstWord, otherInitials, lastName].filter(Boolean).join(' ');
 }
 
 
+// ── Card node ─────────────────────────────────────────────────────────────────
+// Height: 3 name lines (13 × 1.35 × 3 ≈ 53 px) + dates (16 px) + padding (18)
+// = 87 px → use 96 px for comfortable breathing room.
+const CARD_W = 240;
+const CARD_H = 120;
+const NAME_LINE_H = Math.round(13 * 1.35);
+const NAME_LINES = 3;
+
+// Shared style for the action handle boxes (+ and empty side handles)
+const actionHandleBase: CSSProperties = {
+  width: 18,
+  height: 18,
+  borderRadius: 4,
+  border: '1.5px solid #364fc7',
+  background: '#ffffff',
+  color: '#364fc7',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 14,
+  fontWeight: 700,
+  lineHeight: 0,
+  boxShadow: '0 2px 6px rgba(54,79,199,0.15)',
+  cursor: 'crosshair',
+  userSelect: 'none',
+};
+
+const plusGlyphStyle: CSSProperties = {
+  display: 'block',
+  lineHeight: 1,
+  transform: 'translateY(-0.5px)'
+};
+
+// Sibling picker popup anchored to left or right of card
+function MenuBtn({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button className="sibling-menu-btn" style={siblingBtnStyle} onClick={onClick}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ width: 30, minWidth: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+          {icon}
+        </span>
+        <span style={{ fontSize: 12 }}>{label}</span>
+      </span>
+    </button>
+  );
+}
+
+function siblingMenuStyle(side: 'left' | 'right'): CSSProperties {
+  return {
+    position: 'absolute',
+    top: '50%',
+    ...(side === 'left' ? { right: '100%', marginRight: 8 } : { left: '100%', marginLeft: 8 }),
+    transform: 'translateY(-50%)',
+    background: '#fff',
+    border: '1.5px solid #bfcbff',
+    borderRadius: 8,
+    boxShadow: '0 4px 16px rgba(15,23,42,0.14)',
+    padding: '4px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    zIndex: 10000,
+    minWidth: 102,
+  };
+}
+
+const siblingBtnStyle: CSSProperties = {
+  background: 'none',
+  border: 'none',
+  borderRadius: 6,
+  padding: '4px 6px',
+  cursor: 'pointer',
+  fontSize: 13,
+  textAlign: 'left',
+  color: '#1a1a2e',
+  transition: 'background 100ms',
+  whiteSpace: 'nowrap',
+};
+
+export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
+  const reactFlow = useReactFlow<PersonFlowNode, RelationEdge>();
+  const { pushSnapshot } = useHistory();
+  const { dateFormat } = useAppSettings();
+  const [siblingMenu, setSiblingMenu] = useState<'left' | 'right' | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const isDeceased = data.deceased || data.symbol === 'stillbirth';
+  const birthYear = extractYear(data.birthDate, dateFormat);
+  const deathYear = extractYear(data.deathDate, dateFormat);
+  const displayName = formatNodeName(data.firstName ?? '', data.lastName ?? '');
+
+  const card: CSSProperties = {
+    background: 'linear-gradient(160deg, #ffffff 0%, #eef2ff 100%)',
+    border: selected ? '2px solid #5c7cfa' : '1.5px solid #bfcbff',
+    borderRadius: 10,
+    boxShadow: selected
+      ? '0 0 0 4px rgba(92,124,250,0.18), 0 8px 28px rgba(15,23,42,0.18)'
+      : '0 4px 16px rgba(15,23,42,0.10)',
+    padding: '18px 20px 18px 16px',
+    width: CARD_W,
+    height: CARD_H,
+    boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    position: 'relative',
+    zIndex: siblingMenu ? 5000 : undefined,
+    overflow: 'visible',
+    transition: 'box-shadow 140ms ease, border-color 140ms ease',
+    cursor: 'default',
+  };
+
+  const nameStyle: CSSProperties = {
+    fontWeight: 700,
+    fontSize: 13,
+    lineHeight: 1.35,
+    color: '#1a1a2e',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: NAME_LINES,
+    overflow: 'hidden',
+    wordBreak: 'break-word',
+    height: NAME_LINE_H * NAME_LINES,
+  };
+
+  const datesStyle: CSSProperties = {
+    display: 'flex', gap: 8, marginTop: 3,
+    flexWrap: 'nowrap', overflow: 'hidden', height: 16, alignItems: 'center',
+  };
+
+  const isPrimarySymbol = data.symbol === 'male' || data.symbol === 'female' || data.symbol === 'unknown';
+
+  useEffect(() => {
+    if (!siblingMenu) return;
+
+    const onDocPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (menuRef.current?.contains(target)) return;
+      setSiblingMenu(null);
+    };
+
+    const onEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSiblingMenu(null);
+    };
+
+    window.addEventListener('pointerdown', onDocPointerDown, true);
+    window.addEventListener('keydown', onEsc);
+    return () => {
+      window.removeEventListener('pointerdown', onDocPointerDown, true);
+      window.removeEventListener('keydown', onEsc);
+    };
+  }, [siblingMenu]);
+
+  // ── action handlers ────────────────────────────────────────────────────────
+  const addParents = () => {
+    const current = reactFlow.getNode(id);
+    if (!current) return;
+    pushSnapshot(reactFlow.getNodes(), reactFlow.getEdges());
+
+    const fatherID = crypto.randomUUID();
+    const motherID = crypto.randomUUID();
+    const fatherNode = createPersonNode(fatherID, 'male', current.position.x - 200, current.position.y - 200, 'Father', '');
+    const motherNode = createPersonNode(motherID, 'female', current.position.x + 200, current.position.y - 200, 'Mother', '');
+
+    reactFlow.setNodes((prev) => [...prev, fatherNode, motherNode]);
+    reactFlow.setEdges((prev) => [
+      ...prev,
+      // partner edge: father's right handle → mother's left handle (side-to-side)
+      createRelationEdge(fatherID, motherID, 'partner', { sourceHandle: 'right-source', targetHandle: 'left-target' }),
+      createRelationEdge(fatherID, id, 'parent-child'),
+      createRelationEdge(motherID, id, 'parent-child'),
+    ]);
+  };
+
+  const addChild = () => {
+    const current = reactFlow.getNode(id);
+    if (!current) return;
+    pushSnapshot(reactFlow.getNodes(), reactFlow.getEdges());
+
+    const existingChildren = reactFlow.getEdges()
+      .filter((e) => e.source === id && (e.data?.relation === 'parent-child' || e.data?.relation === 'adoption'))
+      .map((e) => reactFlow.getNode(e.target))
+      .filter((n): n is PersonFlowNode => Boolean(n));
+
+    const x = existingChildren.length > 0
+      ? Math.max(...existingChildren.map((n) => n.position.x)) + 220
+      : current.position.x;
+    const y = existingChildren.length > 0
+      ? Math.max(current.position.y + 180, ...existingChildren.map((n) => n.position.y))
+      : current.position.y + 180;
+
+    const childID = crypto.randomUUID();
+    reactFlow.setNodes((prev) => [...prev, createPersonNode(childID, 'unknown', x, y, 'Child', '')]);
+    reactFlow.setEdges((prev) => [...prev, createRelationEdge(id, childID, 'parent-child')]);
+  };
+
+  const addSibling = (side: 'left' | 'right', symbol: 'male' | 'female', isPartner = false) => {
+    const current = reactFlow.getNode(id);
+    if (!current) return;
+    pushSnapshot(reactFlow.getNodes(), reactFlow.getEdges());
+
+    // Find parents of the current node (only needed for siblings, not partners)
+    const parentIDs = !isPartner
+      ? reactFlow.getEdges()
+          .filter((e) => e.target === id && e.data?.relation === 'parent-child')
+          .map((e) => e.source)
+      : [];
+
+    // Find all siblings (other children of the same parents) for positioning
+    const siblingNodes = parentIDs.length > 0
+      ? reactFlow.getEdges()
+          .filter((e) => parentIDs.includes(e.source) && e.data?.relation === 'parent-child' && e.target !== id)
+          .map((e) => reactFlow.getNode(e.target))
+          .filter((n): n is PersonFlowNode => Boolean(n))
+      : [];
+
+    const STEP = CARD_W + 40;
+    let x: number;
+    if (side === 'left') {
+      x = siblingNodes.length > 0
+        ? Math.min(current.position.x, ...siblingNodes.map((n) => n.position.x)) - STEP
+        : current.position.x - STEP;
+    } else {
+      x = siblingNodes.length > 0
+        ? Math.max(current.position.x, ...siblingNodes.map((n) => n.position.x)) + STEP
+        : current.position.x + STEP;
+    }
+
+    const newID = crypto.randomUUID();
+    const defaultLabel = isPartner ? (symbol === 'male' ? 'Partner' : 'Partner') : (symbol === 'male' ? 'Brother' : 'Sister');
+    reactFlow.setNodes((prev) => [...prev, createPersonNode(newID, symbol, x, current.position.y, defaultLabel, '')]);
+
+    if (isPartner) {
+      // Partner: horizontal side-to-side edge, no parent connection
+      if (side === 'left') {
+        // newNode (right) → current (left): newNode right-source → current left-target
+        reactFlow.setEdges((prev) => [
+          ...prev,
+          createRelationEdge(newID, id, 'partner', { sourceHandle: 'right-source', targetHandle: 'left-target' }),
+        ]);
+      } else {
+        // current (right) → newNode (left)
+        reactFlow.setEdges((prev) => [
+          ...prev,
+          createRelationEdge(id, newID, 'partner', { sourceHandle: 'right-source', targetHandle: 'left-target' }),
+        ]);
+      }
+    } else {
+      // Sibling: connect same parents
+      reactFlow.setEdges((prev) => [
+        ...prev,
+        ...parentIDs.map((pid) => createRelationEdge(pid, newID, 'parent-child')),
+      ]);
+    }
+
+    setSiblingMenu(null);
+  };
+
+  // ── handle elements ─────────────────────────────────────────────────────────
+  const handles = isPrimarySymbol ? (
+    <>
+      {/* Top + : click adds parents, drag to connect manually */}
+      <Handle
+        type="target"
+        id="top-target"
+        position={Position.Top}
+        className="action-handle"
+        style={{ ...actionHandleBase, top: 0, transform: 'translate(-50%, -50%)' }}
+        onClick={(e) => { e.stopPropagation(); addParents(); }}
+      >
+        <span style={plusGlyphStyle}>+</span>
+      </Handle>
+
+      {/* Bottom + : click adds child, drag to connect manually */}
+      <Handle
+        type="source"
+        id="bottom-source"
+        position={Position.Bottom}
+        className="action-handle"
+        style={{ ...actionHandleBase, bottom: 0, transform: 'translate(-50%, 50%)' }}
+        onClick={(e) => { e.stopPropagation(); addChild(); }}
+      >
+        <span style={plusGlyphStyle}>+</span>
+      </Handle>
+
+      {/* Left + : click shows sibling menu (add left sibling), drag to connect */}
+      <Handle
+        type="target"
+        id="left-target"
+        position={Position.Left}
+        className="action-handle"
+        style={{ ...actionHandleBase, left: 0, transform: 'translate(-50%, -50%)' }}
+        onClick={(e) => { e.stopPropagation(); setSiblingMenu((prev) => prev === 'left' ? null : 'left'); }}
+      >
+        <span style={plusGlyphStyle}>+</span>
+      </Handle>
+      {siblingMenu === 'left' && (
+        <div ref={menuRef} style={siblingMenuStyle('left')} onClick={(e) => e.stopPropagation()}>
+          <MenuBtn icon={<SymbolChip symbol="male"   size={20} />} label="Brother"        onClick={() => addSibling('left', 'male')} />
+          <MenuBtn icon={<SymbolChip symbol="female" size={20} />} label="Sister"         onClick={() => addSibling('left', 'female')} />
+          <hr style={{ margin: '4px 6px', border: 'none', borderTop: '1px solid #e9ecef' }} />
+          <MenuBtn icon={<PartnerSymbolIcon sex="male" size={22} />} label="Partner male"   onClick={() => addSibling('left', 'male',   true)} />
+          <MenuBtn icon={<PartnerSymbolIcon sex="female" size={22} />} label="Partner female" onClick={() => addSibling('left', 'female', true)} />
+        </div>
+      )}
+
+      {/* Right + : click shows sibling menu (add right sibling), drag to connect */}
+      <Handle
+        type="source"
+        id="right-source"
+        position={Position.Right}
+        className="action-handle"
+        style={{ ...actionHandleBase, right: 0, transform: 'translate(50%, -50%)' }}
+        onClick={(e) => { e.stopPropagation(); setSiblingMenu((prev) => prev === 'right' ? null : 'right'); }}
+      >
+        <span style={plusGlyphStyle}>+</span>
+      </Handle>
+
+      {/* Sibling popup – right side */}
+      {siblingMenu === 'right' && (
+        <div ref={menuRef} style={siblingMenuStyle('right')} onClick={(e) => e.stopPropagation()}>
+          <MenuBtn icon={<SymbolChip symbol="male"   size={20} />} label="Brother"        onClick={() => addSibling('right', 'male')} />
+          <MenuBtn icon={<SymbolChip symbol="female" size={20} />} label="Sister"         onClick={() => addSibling('right', 'female')} />
+          <hr style={{ margin: '4px 6px', border: 'none', borderTop: '1px solid #e9ecef' }} />
+          <MenuBtn icon={<PartnerSymbolIcon sex="male" size={22} />} label="Partner male"   onClick={() => addSibling('right', 'male',   true)} />
+          <MenuBtn icon={<PartnerSymbolIcon sex="female" size={22} />} label="Partner female" onClick={() => addSibling('right', 'female', true)} />
+        </div>
+      )}
+    </>
+  ) : (
+    <>
+      <Handle type="target" position={Position.Top}    style={{ width: 8, height: 8, background: '#364fc7' }} />
+      <Handle type="source" position={Position.Bottom} style={{ width: 8, height: 8, background: '#364fc7' }} />
+    </>
+  );
+
+  return (
+    <div style={card} onClick={() => setSiblingMenu(null)}>
+      {handles}
+
+      {/* left: genogram symbol */}
+      <div style={{ flexShrink: 0, lineHeight: 0 }}>
+        <SymbolIcon symbol={data.symbol} deceased={isDeceased} />
+      </div>
+
+      {/* right: name + dates */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={nameStyle} title={data.name || undefined}>
+          {displayName || 'Unnamed'}
+        </div>
+
+        {(birthYear || deathYear || isDeceased) && (
+          <div style={datesStyle}>
+            {birthYear && (
+              <span style={{ fontSize: 11, color: '#555', display: 'flex', alignItems: 'center', gap: 2, whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 10 }}>✦</span> {birthYear}
+              </span>
+            )}
+            {deathYear && (
+              <span style={{ fontSize: 11, color: '#555', display: 'flex', alignItems: 'center', gap: 2, whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 12 }}>†</span> {deathYear}
+              </span>
+            )}
+            {isDeceased && !deathYear && (
+              <span style={{ fontSize: 11, color: '#777', display: 'flex', alignItems: 'center', gap: 2, whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 12 }}>†</span> (unknown)
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

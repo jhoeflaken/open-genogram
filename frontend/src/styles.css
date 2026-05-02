@@ -6,6 +6,39 @@ body,
   margin: 0;
 }
 
+.diagram-main {
+  height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+}
+
+.diagram-toolbar {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e9ecef;
+  background: #fff;
+}
+
+.flow-wrapper {
+  flex: 1;
+  min-height: 0;
+}
+
+.node-context-menu {
+  position: fixed;
+  z-index: 300;
+}
+
+/* Hover highlight for + and empty connector handle boxes */
+.action-handle:hover {
+  background: #eef2ff !important;
+  border-color: #5c7cfa !important;
+  box-shadow: 0 0 0 3px rgba(92,124,250,0.22), 0 2px 6px rgba(54,79,199,0.2) !important;
+}
+
+.sibling-menu-btn:hover {
+  background: #eef2ff !important;
+}
+
 .react-flow__attribution {
   display: none;
 }
