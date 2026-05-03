@@ -39,11 +39,11 @@ export function createRelationEdge(
     target,
     sourceHandle: options?.sourceHandle,
     targetHandle: options?.targetHandle,
-    type: isPartner ? 'partner' : 'smoothstep',
+    type: isPartner ? 'partner' : 'step',
     style: relationStyle(relation),
     data: { relation, anchor: 0.5 },
     animated: relation === 'adoption',
-    pathOptions: isPartner ? { borderRadius: 40 } : undefined
+    pathOptions: isPartner ? { borderRadius: 0 } : undefined
   };
 }
 
@@ -65,11 +65,11 @@ export function updateEdgeRelation<T extends RelationEdgeData>(edge: Edge<T>, re
   return {
     ...edge,
     data: { ...edge.data, relation } as T,
-    type: isPartner ? 'partner' : 'smoothstep',
+    type: isPartner ? 'partner' : 'step',
     style: relationStyle(relation),
     markerEnd: undefined,
     animated: relation === 'adoption',
-    pathOptions: isPartner ? { borderRadius: 40 } : undefined
+    pathOptions: isPartner ? { borderRadius: 0 } : undefined
   };
 }
 

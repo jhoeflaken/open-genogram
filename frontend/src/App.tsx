@@ -277,7 +277,7 @@ export function App() {
         return;
       }
 
-      if (connection.sourceHandle === 'bottom-source') {
+      if (connection.sourceHandle === 'bottom-source' || connection.sourceHandle === 'bottom-target' || connection.targetHandle === 'bottom-source' || connection.targetHandle === 'bottom-target') {
         const edgeId = crypto.randomUUID();
         const edge = createRelationEdge(connection.source, connection.target, 'partner', {
           id: edgeId,
@@ -474,7 +474,7 @@ export function App() {
         const isPartner = rel === 'partner' || rel === 'divorce';
         return {
           ...edge,
-          type: isPartner ? 'partner' : 'smoothstep',
+          type: isPartner ? 'partner' : 'step',
           style: relationStyle(rel),
           animated: rel === 'adoption',
           sourceHandle: isPartner ? (edge.sourceHandle || 'bottom-source') : edge.sourceHandle,

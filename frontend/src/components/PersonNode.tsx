@@ -229,11 +229,25 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
     const fatherNode = createPersonNode(fatherID, 'male', current.position.x - 200, current.position.y - 200, 'Father', '');
     const motherNode = createPersonNode(motherID, 'female', current.position.x + 200, current.position.y - 200, 'Mother', '');
 
-    reactFlow.setNodes((prev) => [...prev, fatherNode, motherNode]);
+    const edgeId = crypto.randomUUID();
+    const partnerEdge = createRelationEdge(fatherID, motherID, 'partner', {
+      id: edgeId,
+      sourceHandle: 'bottom-source',
+      targetHandle: 'bottom-target'
+    });
+
+    const anchorNode: PersonFlowNode = {
+      id: `anchor-${edgeId}`,
+      type: 'anchor',
+      position: { x: current.position.x, y: current.position.y - 160 },
+      data: { name: '', sex: 'unknown', symbol: 'unknown', deceased: false, isAnchor: true },
+      draggable: false,
+    };
+
+    reactFlow.setNodes((prev) => [...prev, fatherNode, motherNode, anchorNode]);
     reactFlow.setEdges((prev) => [
       ...prev,
-      // partner edge: father's right handle → mother's left handle (side-to-side)
-      createRelationEdge(fatherID, motherID, 'partner', { sourceHandle: 'right-source', targetHandle: 'left-target' }),
+      partnerEdge,
       createRelationEdge(fatherID, id, 'parent-child'),
       createRelationEdge(motherID, id, 'parent-child'),
     ]);
@@ -299,19 +313,37 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
 
     if (isPartner) {
       // Partner: horizontal side-to-side edge, no parent connection
+      const edgeId = crypto.randomUUID();
+      let sourceId: string;
+      let targetId: string;
+
       if (side === 'left') {
-        // newNode (right) → current (left): newNode right-source → current left-target
-        reactFlow.setEdges((prev) => [
-          ...prev,
-          createRelationEdge(newID, id, 'partner', { sourceHandle: 'bottom-source', targetHandle: 'bottom-target' }),
-        ]);
+        sourceId = newID;
+        targetId = id;
       } else {
-        // current (right) → newNode (left)
-        reactFlow.setEdges((prev) => [
-          ...prev,
-          createRelationEdge(id, newID, 'partner', { sourceHandle: 'bottom-source', targetHandle: 'bottom-target' }),
-        ]);
+        sourceId = id;
+        targetId = newID;
       }
+
+      const edge = createRelationEdge(sourceId, targetId, 'partner', {
+        id: edgeId,
+        sourceHandle: 'bottom-source',
+        targetHandle: 'bottom-target'
+      });
+
+      reactFlow.setEdges((prev) => [...prev, edge]);
+
+      // Create anchor node
+      const anchorX = (x + current.position.x) / 2;
+      const anchorY = Math.max(current.position.y, current.position.y) + 40;
+      const anchorNode: PersonFlowNode = {
+        id: `anchor-${edgeId}`,
+        type: 'anchor',
+        position: { x: anchorX, y: anchorY },
+        data: { name: '', sex: 'unknown', symbol: 'unknown', deceased: false, isAnchor: true },
+        draggable: false,
+      };
+      reactFlow.setNodes((prev) => [...prev, anchorNode]);
     } else {
       // Sibling: connect same parents
       reactFlow.setEdges((prev) => [
