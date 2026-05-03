@@ -477,55 +477,64 @@ export function App() {
   }, []);
 
   const handlePrint = useCallback(() => {
-    if (!reactFlowInstance) {
-      window.print();
-      return;
-    }
-
-    const savedViewport = reactFlowInstance.getViewport();
-
-    const onAfterPrint = () => {
-      window.removeEventListener('afterprint', onAfterPrint);
-      void reactFlowInstance.setViewport(savedViewport, { duration: 200 });
-    };
-    window.addEventListener('afterprint', onAfterPrint);
+    if (!reactFlowInstance) { window.print(); return; }
 
     const allNodes = reactFlowInstance.getNodes();
+    const wrapperEl = document.querySelector('.flow-wrapper') as HTMLElement | null;
+    if (!wrapperEl) { window.print(); return; }
 
+    // Synchronously set the viewport transform so all nodes are visible in the clone
     if (allNodes.length > 0) {
-      // Calculate exact bounds of all nodes
       const bounds = getNodesBounds(allNodes);
-
-      // Find the ReactFlow viewport DOM element
-      const viewportEl = document.querySelector('.react-flow__viewport') as HTMLElement | null;
-      const wrapperEl = document.querySelector('.flow-wrapper') as HTMLElement | null;
-
-      if (viewportEl && wrapperEl) {
-        const w = wrapperEl.clientWidth;
-        const h = wrapperEl.clientHeight;
-
-        // Compute viewport transform that fits all nodes with padding
-        const vp = getViewportForBounds(bounds, w, h, 0.1, 2, 0.08);
-
-        // Apply transform directly to DOM — bypasses React's async rendering
-        viewportEl.style.transform = `translate(${vp.x}px,${vp.y}px) scale(${vp.zoom})`;
-
-        // Restore the element's inline style after printing
-        const prevTransform = viewportEl.style.transform;
-        const onAfterPrintTransform = () => {
-          window.removeEventListener('afterprint', onAfterPrintTransform);
-          viewportEl.style.transform = '';
-        };
-        window.removeEventListener('afterprint', onAfterPrint); // re-add together
-        window.addEventListener('afterprint', () => {
-          viewportEl.style.transform = '';
-          void reactFlowInstance.setViewport(savedViewport, { duration: 200 });
-        }, { once: true });
-        void prevTransform; // suppress unused warning
-      }
+      const w = wrapperEl.clientWidth || 1200;
+      const h = wrapperEl.clientHeight || 800;
+      const vp = getViewportForBounds(bounds, w, h, 0.1, 2, 0.08);
+      const vpEl = wrapperEl.querySelector('.react-flow__viewport') as HTMLElement | null;
+      if (vpEl) vpEl.style.transform = `translate(${vp.x}px,${vp.y}px) scale(${vp.zoom})`;
     }
 
-    window.print();
+    // Snapshot the canvas HTML with the new transform applied
+    const canvasHTML = wrapperEl.outerHTML;
+
+    // Restore inline style immediately (React will sync back its own transform)
+    const vpEl = wrapperEl.querySelector('.react-flow__viewport') as HTMLElement | null;
+    if (vpEl) vpEl.style.transform = '';
+
+    // Collect all styles from the current document
+    const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+      .map((el) => el.outerHTML).join('\n');
+    const inlineStyles = Array.from(document.querySelectorAll('style'))
+      .map((el) => el.outerHTML).join('\n');
+    const rootStyle = document.documentElement.getAttribute('style') ?? '';
+
+    const printWindow = window.open('', '_blank', 'width=1200,height=900');
+    if (!printWindow) { window.print(); return; }
+
+    printWindow.document.write(`<!DOCTYPE html>
+<html style="${rootStyle}">
+<head>
+  <meta charset="utf-8">
+  ${styleLinks}
+  ${inlineStyles}
+  <style>
+    *, *::before, *::after { print-color-adjust: exact; -webkit-print-color-adjust: exact; box-sizing: border-box; }
+    @page { size: auto; margin: 8mm; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #fff; }
+    .flow-wrapper { width: 100vw !important; height: 100vh !important; overflow: visible !important; }
+    .react-flow, .react-flow__container, .react-flow__renderer, .react-flow__pane { overflow: visible !important; }
+    .action-handle, .react-flow__minimap, .react-flow__controls, .react-flow__background { display: none !important; }
+  </style>
+</head>
+<body>${canvasHTML}</body>
+</html>`);
+    printWindow.document.close();
+
+    const doprint = () => { printWindow.print(); printWindow.close(); };
+    if (printWindow.document.readyState === 'complete') {
+      doprint();
+    } else {
+      printWindow.addEventListener('load', doprint, { once: true });
+    }
   }, [reactFlowInstance]);
 
   const onAsideResizeMouseDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {

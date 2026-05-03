@@ -144,54 +144,7 @@ body,
 }
 
 @media print {
-  @page {
-    size: auto;
-    margin: 10mm;
-  }
-
-  /* Hide all chrome — only the flow canvas should print */
-  .mantine-AppShell-header,
-  .mantine-AppShell-navbar,
-  .mantine-AppShell-aside,
-  .diagram-toolbar,
-  .details-aside-toggle,
-  .details-aside-resize-strip,
-  .react-flow__minimap,
-  .react-flow__controls,
-  .react-flow__background,
-  .action-handle {
-    display: none !important;
-  }
-
-  /* Reset AppShell layout so the canvas can fill the page */
-  html, body, #root,
-  .mantine-AppShell-root,
-  .mantine-AppShell-main,
-  .diagram-main,
-  .flow-wrapper {
-    overflow: visible !important;
-    width: 100% !important;
-    height: auto !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    inset: 0 !important;
-  }
-
-  /* Remove ReactFlow's overflow:hidden so all nodes outside viewport are visible */
-  .react-flow,
-  .react-flow__container,
-  .react-flow__renderer,
-  .react-flow__pane {
-    overflow: visible !important;
-    width: auto !important;
-    height: auto !important;
-  }
-
-  /* Ensure diagram canvas content renders with correct color */
-  * {
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
-  }
+  /* Printing is handled by a dedicated print window — hide action handles in case of direct Ctrl+P */
+  .action-handle { display: none !important; }
 }
 
