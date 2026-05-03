@@ -28,6 +28,52 @@ body,
   z-index: 300;
 }
 
+.details-aside-shell {
+  overflow: visible;
+}
+
+.details-aside-root {
+  height: 100%;
+  position: relative;
+  border-left: 1px solid #e9ecef;
+  background: #fff;
+}
+
+.details-aside-resizer {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 30;
+}
+
+.details-aside-toggle {
+  position: absolute;
+  left: -22px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 40px;
+  border: 1px solid #d0d7de;
+  border-right: none;
+  border-radius: 20px 0 0 20px;
+  background: #fff;
+  color: #364fc7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 40;
+  box-shadow: -1px 0 8px rgba(15, 23, 42, 0.08);
+}
+
+.details-aside-toggle:hover {
+  background: #eef2ff;
+  color: #1c2f92;
+}
+
 /* Hover highlight for + and empty connector handle boxes */
 .action-handle:hover {
   background: #eef2ff !important;

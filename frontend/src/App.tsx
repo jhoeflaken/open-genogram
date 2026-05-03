@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { DragEvent, MouseEvent as ReactMouseEvent } from 'react';
 import {
   addEdge,
   Background,
@@ -23,6 +23,8 @@ import {
   IconArrowsHorizontal,
   IconArrowsVertical,
   IconChevronDown,
+  IconChevronLeft,
+  IconChevronRight,
   IconDeviceFloppy,
   IconFilePlus,
   IconFolderOpen,
@@ -50,6 +52,9 @@ import type { DateFormat } from './lib/dateFormat';
 import type { Diagram, PersonFlowNode, PersonNodeData, PersonSymbol, RelationEdgeData } from './types/genogram';
 
 const nodeTypes: NodeTypes = { person: PersonNode };
+const ASIDE_MIN_WIDTH = 280;
+const ASIDE_MAX_WIDTH = 720;
+const ASIDE_COLLAPSED_WIDTH = 28;
 
 export function App() {
   const { dateFormat, setDateFormat } = useAppSettings();
@@ -84,6 +89,10 @@ export function App() {
   const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
   const [relationDraft, setRelationDraft] = useState<{ sourceId: string; side: 'left' | 'right' } | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [asideCollapsed, setAsideCollapsed] = useState(false);
+  const [asideWidth, setAsideWidth] = useState(340);
+  const [asideLastExpandedWidth, setAsideLastExpandedWidth] = useState(340);
+  const asideResizingRef = useRef(false);
 
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
   const selectedEdge = useMemo(() => edges.find((e) => e.id === selectedEdgeId) ?? null, [edges, selectedEdgeId]);
@@ -462,11 +471,43 @@ export function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [edges, nodes, pushSnapshot, reactFlowInstance, redo, removeNodeByID, selectedEdgeId, selectedNodeId, selectedNodeIds, setEdges, setNodes, undo]);
 
+  const toggleAside = useCallback(() => {
+    if (asideCollapsed) {
+      setAsideWidth(Math.min(ASIDE_MAX_WIDTH, Math.max(ASIDE_MIN_WIDTH, asideLastExpandedWidth)));
+      setAsideCollapsed(false);
+      return;
+    }
+    setAsideLastExpandedWidth(asideWidth);
+    setAsideCollapsed(true);
+  }, [asideCollapsed, asideLastExpandedWidth, asideWidth]);
+
+  const startAsideResize = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    if (asideCollapsed) return;
+    event.preventDefault();
+    asideResizingRef.current = true;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!asideResizingRef.current) return;
+      const nextWidth = Math.max(ASIDE_MIN_WIDTH, Math.min(ASIDE_MAX_WIDTH, window.innerWidth - moveEvent.clientX));
+      setAsideWidth(nextWidth);
+      setAsideLastExpandedWidth(nextWidth);
+    };
+
+    const onMouseUp = () => {
+      asideResizingRef.current = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, [asideCollapsed]);
+
   return (
     <AppShell
       header={{ height: 64 }}
       navbar={{ width: 210, breakpoint: 'sm' }}
-      aside={{ width: 340, breakpoint: 'sm' }}
+      aside={{ width: asideCollapsed ? ASIDE_COLLAPSED_WIDTH : asideWidth, breakpoint: 'sm' }}
       padding={0}
     >
       <AppShell.Header p="sm" style={{ borderBottom: '1px solid #e9ecef' }}>
@@ -628,13 +669,21 @@ export function App() {
         </div>
       </AppShell.Main>
 
-      <AppShell.Aside>
-        <DetailsPanel
-          node={selectedNode}
-          edge={selectedEdge}
-          onNodeChange={handleNodePatch}
-          onEdgeRelationChange={handleEdgeRelationPatch}
-        />
+      <AppShell.Aside className="details-aside-shell">
+        <div className="details-aside-root">
+          {!asideCollapsed && <div className="details-aside-resizer" onMouseDown={startAsideResize} />}
+          <button type="button" className="details-aside-toggle" onClick={toggleAside} aria-label={asideCollapsed ? 'Expand details panel' : 'Collapse details panel'}>
+            {asideCollapsed ? <IconChevronLeft size={14} /> : <IconChevronRight size={14} />}
+          </button>
+          {!asideCollapsed && (
+            <DetailsPanel
+              node={selectedNode}
+              edge={selectedEdge}
+              onNodeChange={handleNodePatch}
+              onEdgeRelationChange={handleEdgeRelationPatch}
+            />
+          )}
+        </div>
       </AppShell.Aside>
 
       <Modal opened={nodeDialogOpen} onClose={() => setNodeDialogOpen(false)} title="Add Node" centered>
