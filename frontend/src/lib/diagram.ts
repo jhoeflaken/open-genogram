@@ -30,11 +30,11 @@ export function createRelationEdge(
   source: string,
   target: string,
   relation: RelationType = 'parent-child',
-  options?: { sourceHandle?: string; targetHandle?: string }
+  options?: { sourceHandle?: string; targetHandle?: string; id?: string }
 ): Edge<RelationEdgeData> {
   const isPartner = relation === 'partner' || relation === 'divorce';
   return {
-    id: `${source}-${target}-${relation}-${crypto.randomUUID().slice(0, 6)}`,
+    id: options?.id || `${source}-${target}-${relation}-${crypto.randomUUID().slice(0, 6)}`,
     source,
     target,
     sourceHandle: options?.sourceHandle,
@@ -65,7 +65,7 @@ export function updateEdgeRelation<T extends RelationEdgeData>(edge: Edge<T>, re
   return {
     ...edge,
     data: { ...edge.data, relation } as T,
-    type: isPartner ? 'smoothstep' : 'smoothstep',
+    type: isPartner ? 'partner' : 'smoothstep',
     style: relationStyle(relation),
     markerEnd: undefined,
     animated: relation === 'adoption',

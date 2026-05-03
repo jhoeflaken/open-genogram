@@ -3,13 +3,11 @@ import { createPortal } from 'react-dom';
 import {
   BaseEdge,
   EdgeLabelRenderer,
-  type EdgeProps,
   useReactFlow,
+  type EdgeProps,
 } from '@xyflow/react';
-import type { RelationEdge, PersonSymbol, PersonFlowNode } from '../types/genogram';
-import { actionHandleBase, plusGlyphStyle, MenuBtn, siblingMenuStyle } from './PersonNode';
-import { SymbolChip } from './SymbolIcons';
-import { createPersonNode, createRelationEdge } from '../lib/diagram';
+import type { RelationEdge } from '../types/genogram';
+import { actionHandleBase } from './PersonNode';
 import { useHistory } from '../context/HistoryContext';
 
 export function PartnerEdge({
@@ -25,10 +23,8 @@ export function PartnerEdge({
   data,
   selected,
 }: EdgeProps<RelationEdge>) {
-  const { setEdges, setNodes, getNode } = useReactFlow();
-  const { pushSnapshot, getNodes, getEdges } = useHistory();
-  const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number } | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const { setEdges, setNodes, getNode, getNodes, getEdges } = useReactFlow();
+  const { pushSnapshot } = useHistory();
 
   // U-shape logic
   const drop = 40;
@@ -42,6 +38,20 @@ export function PartnerEdge({
   const anchor = data?.anchor ?? 0.5;
   const anchorX = sourceX + (targetX - sourceX) * anchor;
   const anchorY = baseY;
+
+  // Sync anchor node position
+  useEffect(() => {
+    const anchorNodeId = `anchor-${id}`;
+    setNodes((nds) => nds.map((n) => {
+      if (n.id === anchorNodeId) {
+        return {
+          ...n,
+          position: { x: anchorX - 10, y: anchorY - 10 },
+        };
+      }
+      return n;
+    }));
+  }, [id, anchorX, anchorY, setNodes]);
 
   const onHandleMouseDown = useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
@@ -78,51 +88,6 @@ export function PartnerEdge({
     document.addEventListener('mouseup', onMouseUp);
   }, [id, anchor, sourceX, targetX, setEdges]);
 
-  const onHandleClick = useCallback((event: React.MouseEvent) => {
-    event.stopPropagation();
-    setMenuAnchor({ x: event.clientX, y: event.clientY });
-  }, []);
-
-  useEffect(() => {
-    if (!menuAnchor) return;
-    const onDocPointerDown = (event: PointerEvent) => {
-      const targetElement = event.target as Node | null;
-      if (!targetElement || menuRef.current?.contains(targetElement)) return;
-      setMenuAnchor(null);
-    };
-    const onEsc = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuAnchor(null);
-    };
-    window.addEventListener('pointerdown', onDocPointerDown, true);
-    window.addEventListener('keydown', onEsc);
-    return () => {
-      window.removeEventListener('pointerdown', onDocPointerDown, true);
-      window.removeEventListener('keydown', onEsc);
-    };
-  }, [menuAnchor]);
-
-  const addChild = (symbol: PersonSymbol) => {
-    pushSnapshot(getNodes(), getEdges());
-
-    const childID = crypto.randomUUID();
-    const childNode = createPersonNode(
-      childID,
-      symbol,
-      anchorX,
-      anchorY + 100,
-      symbol === 'male' ? 'Son' : 'Daughter',
-      ''
-    );
-
-    setNodes((prev) => [...prev, childNode]);
-    setEdges((prev) => [
-      ...prev,
-      createRelationEdge(source, childID, 'parent-child'),
-      createRelationEdge(target, childID, 'parent-child'),
-    ]);
-    setMenuAnchor(null);
-  };
-
   return (
     <>
       <BaseEdge path={edgePath} markerEnd={markerEnd} style={{ ...style, strokeWidth: selected ? 3 : 2 }} />
@@ -135,28 +100,22 @@ export function PartnerEdge({
           }}
           className="nodrag nopan"
         >
-          {/* Draggable and clickable action handle */}
+          {/* Draggable handle for moving anchor node along the edge */}
           <div
             onMouseDown={onHandleMouseDown}
-            onClick={onHandleClick}
             style={{
               ...actionHandleBase,
-              cursor: 'pointer',
-              zIndex: 10,
+              cursor: 'grab',
+              zIndex: 5,
               width: 20,
               height: 20,
+              background: 'transparent',
+              border: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
             }}
-          >
-            <span style={plusGlyphStyle}>+</span>
-          </div>
-
-          {menuAnchor && createPortal(
-            <div ref={menuRef} style={siblingMenuStyle({ side: 'bottom', x: menuAnchor.x, y: menuAnchor.y })} onClick={(e) => e.stopPropagation()}>
-              <MenuBtn icon={<SymbolChip symbol="male" size={20} />} label="Son" onClick={() => addChild('male')} />
-              <MenuBtn icon={<SymbolChip symbol="female" size={20} />} label="Daughter" onClick={() => addChild('female')} />
-            </div>,
-            document.body
-          )}
+          />
         </div>
       </EdgeLabelRenderer>
     </>

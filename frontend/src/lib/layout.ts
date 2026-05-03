@@ -18,8 +18,11 @@ export function performLayout(
   const partnersOf = new Map<string, string[]>();
 
   edges.forEach((edge) => {
-    const { source, target, data } = edge;
+    const { source, target, data, sourceHandle } = edge;
     if (data?.relation === 'parent-child' || data?.relation === 'adoption') {
+      // If source is an anchor node, we need to map it back to parents?
+      // Actually, if children are drawn from the anchor, the anchor IS the source in the tree.
+      // But the anchor itself is linked to a 'partner' edge.
       if (!childrenOf.has(source)) childrenOf.set(source, []);
       childrenOf.get(source)!.push(target);
       if (!parentsOf.has(target)) parentsOf.set(target, []);
@@ -32,11 +35,42 @@ export function performLayout(
     }
   });
 
+  // Identify Anchor nodes and their associated partner edges
+  const anchorToEdge = new Map<string, string>();
+  const edgeToAnchor = new Map<string, string>();
+  nodes.forEach(n => {
+    if (n.type === 'anchor' || n.id.startsWith('anchor-')) {
+      const edgeId = n.id.replace('anchor-', '');
+      anchorToEdge.set(n.id, edgeId);
+      edgeToAnchor.set(edgeId, n.id);
+    }
+  });
+
+  // Re-map parent-child relations that go through anchors to go through parents for generation logic
+  edges.forEach(edge => {
+    if (edge.data?.relation === 'parent-child' || edge.data?.relation === 'adoption') {
+      if (anchorToEdge.has(edge.source)) {
+        const pEdgeId = anchorToEdge.get(edge.source)!;
+        const pEdge = edges.find(e => e.id === pEdgeId);
+        if (pEdge) {
+          // Add virtual parent-child links for generation calculation
+          const parents = [pEdge.source, pEdge.target];
+          parents.forEach(p => {
+            if (!childrenOf.has(p)) childrenOf.set(p, []);
+            childrenOf.get(p)!.push(edge.target);
+            if (!parentsOf.has(edge.target)) parentsOf.set(edge.target, []);
+            parentsOf.get(edge.target)!.push(p);
+          });
+        }
+      }
+    }
+  });
+
   // 2. Assign generations (levels) using BFS starting from root nodes
   const levels = new Map<string, number>();
   const queue: { id: string; level: number }[] = [];
 
-  const rootNodes = nodes.filter((n) => !parentsOf.has(n.id));
+  const rootNodes = nodes.filter((n) => !parentsOf.has(n.id) && n.type !== 'anchor');
   rootNodes.forEach((n) => {
     queue.push({ id: n.id, level: 0 });
     levels.set(n.id, 0);
@@ -108,17 +142,56 @@ export function performLayout(
 
     familyGroup.forEach((id, idx) => {
       const n = nodeMap.get(id)!;
-      // Reverse order: oldest on the right
-      // We sorted roots and children, but familyGroup is [nodeId, ...partners]
-      // Let's ensure familyGroup is also sorted by age if they are siblings or just use the order.
       n.position = { x: startX - (idx * HORIZONTAL_SPACING), y: level * VERTICAL_SPACING };
     });
 
+    // Handle anchor nodes for partner edges in this group
+    familyGroup.forEach(id => {
+      const partners = partnersOf.get(id) || [];
+      partners.forEach(partnerId => {
+        // Find the edge between id and partnerId
+        const pEdge = edges.find(e => 
+          (e.source === id && e.target === partnerId) || 
+          (e.source === partnerId && e.target === id)
+        );
+        if (pEdge && edgeToAnchor.has(pEdge.id)) {
+          const anchorId = edgeToAnchor.get(pEdge.id)!;
+          const anchorNode = nodeMap.get(anchorId);
+          if (anchorNode) {
+            const sNode = nodeMap.get(pEdge.source)!;
+            const tNode = nodeMap.get(pEdge.target)!;
+            const anchorX = (sNode.position.x + tNode.position.x) / 2;
+            const anchorY = Math.max(sNode.position.y, tNode.position.y) + 40;
+            anchorNode.position = { x: anchorX, y: anchorY };
+            positioned.add(anchorId);
+          }
+        }
+      });
+    });
+
     // Now position children of this family group
-    // Collect all children of all partners in this group
     const allChildren = new Set<string>();
     familyGroup.forEach(id => {
-      (childrenOf.get(id) || []).forEach(cid => allChildren.add(cid));
+      (childrenOf.get(id) || []).forEach(cid => {
+        if (!anchorToEdge.has(cid)) { // Don't treat anchor as a child here
+          allChildren.add(cid);
+        }
+      });
+    });
+
+    // Also collect children that come from anchors of edges in this group
+    familyGroup.forEach(id => {
+      const partners = partnersOf.get(id) || [];
+      partners.forEach(partnerId => {
+        const pEdge = edges.find(e => 
+          (e.source === id && e.target === partnerId) || 
+          (e.source === partnerId && e.target === id)
+        );
+        if (pEdge && edgeToAnchor.has(pEdge.id)) {
+          const anchorId = edgeToAnchor.get(pEdge.id)!;
+          (childrenOf.get(anchorId) || []).forEach(cid => allChildren.add(cid));
+        }
+      });
     });
 
     if (allChildren.size > 0) {
@@ -170,9 +243,27 @@ export function performLayout(
 
   // Ensure any orphaned nodes are also positioned
   nodes.forEach(node => {
-    if (!positioned.has(node.id)) {
+    if (!positioned.has(node.id) && node.type !== 'anchor') {
       positionNode(node.id, currentRootX, levels.get(node.id) || 0);
       currentRootX -= HORIZONTAL_SPACING * 2;
+    }
+  });
+
+  // Finally position any anchor nodes that weren't positioned by family grouping
+  nodes.forEach(node => {
+    if (!positioned.has(node.id) && node.type === 'anchor') {
+      const edgeId = node.id.replace('anchor-', '');
+      const pEdge = edges.find(e => e.id === edgeId);
+      if (pEdge) {
+        const sNode = nodeMap.get(pEdge.source);
+        const tNode = nodeMap.get(pEdge.target);
+        if (sNode && tNode) {
+          const anchorX = (sNode.position.x + tNode.position.x) / 2;
+          const anchorY = Math.max(sNode.position.y, tNode.position.y) + 40;
+          node.position = { x: anchorX, y: anchorY };
+        }
+      }
+      positioned.add(node.id);
     }
   });
 
@@ -181,24 +272,25 @@ export function performLayout(
     const isPartner = edge.data?.relation === 'partner' || edge.data?.relation === 'divorce';
     
     if (isPartner) {
-      // Find the source and target nodes to calculate base anchor
-      const sNode = nodeMap.get(edge.source);
-      const tNode = nodeMap.get(edge.target);
-      let anchor = edge.data?.anchor ?? 0.5;
-
       return {
         ...edge,
         type: 'partner',
         sourceHandle: 'bottom-source',
         targetHandle: 'bottom-target',
         style: { ...edge.style, strokeWidth: 2 },
-        data: { ...edge.data, anchor },
+        data: { ...edge.data, anchor: edge.data?.anchor ?? 0.5 },
       };
     }
 
-    const isChildOfPartner = Array.from(partnersOf.values()).some(partners => 
-        partners.includes(edge.source)
-    );
+    // Check if this edge is between two parents and a child
+    // In our new model, parent-child edges can come from anchor nodes
+    if (anchorToEdge.has(edge.source) || edge.sourceHandle === 'partner-anchor' || edge.sourceHandle === 'anchor-source') {
+      return {
+        ...edge,
+        sourceHandle: 'anchor-source',
+        targetHandle: 'top-target',
+      };
+    }
 
     return {
       ...edge,

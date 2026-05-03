@@ -54,7 +54,9 @@ export const actionHandleBase: CSSProperties = {
 export const plusGlyphStyle: CSSProperties = {
   display: 'block',
   lineHeight: 1,
-  transform: 'translateY(-0.5px)'
+  transform: 'translateY(-0.5px)',
+  pointerEvents: 'none',
+  userSelect: 'none',
 };
 
 // Sibling picker popup anchored to left or right of card
@@ -336,23 +338,20 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
         <span style={plusGlyphStyle}>+</span>
       </Handle>
 
-      {/* Bottom + : click adds child, drag to connect manually */}
+      {/* Bottom handle: drag to connect manually (defaults to partner link) */}
       <Handle
         type="source"
         id="bottom-source"
         position={Position.Bottom}
         className="action-handle"
         style={{ ...actionHandleBase, bottom: 0, transform: 'translate(-50%, 50%)' }}
-        onClick={(e) => { e.stopPropagation(); addChild(); }}
-      >
-        <span style={plusGlyphStyle}>+</span>
-      </Handle>
+      />
 
       <Handle
         type="target"
         id="bottom-target"
         position={Position.Bottom}
-        style={{ ...actionHandleBase, bottom: 0, transform: 'translate(-50%, 50%)', opacity: 0, pointerEvents: 'none' }}
+        style={{ ...actionHandleBase, bottom: 0, transform: 'translate(-50%, 50%)', opacity: 1 }}
       />
 
       {/* Left + : click shows sibling menu (add left sibling), drag to connect */}

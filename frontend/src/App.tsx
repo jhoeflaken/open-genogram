@@ -53,10 +53,14 @@ import { SYMBOL_DEFINITIONS, symbolToSex } from './lib/genogramSymbols';
 import { DATE_FORMAT_OPTIONS } from './lib/dateFormat';
 import { useAppSettings } from './context/AppSettingsContext';
 import { useHistory } from './context/HistoryContext';
+import { AnchorNode } from './components/AnchorNode';
 import type { DateFormat } from './lib/dateFormat';
 import type { Diagram, PersonFlowNode, PersonNodeData, PersonSymbol, RelationEdgeData } from './types/genogram';
 
-const nodeTypes: NodeTypes = { person: PersonNode };
+const nodeTypes: NodeTypes = {
+  person: PersonNode,
+  anchor: AnchorNode,
+};
 const edgeTypes = {
   partner: PartnerEdge,
 };
@@ -70,8 +74,26 @@ export function App() {
   const { pushSnapshot, undo, redo, canUndo, canRedo, register } = useHistory();
   const [configOpen, setConfigOpen] = useState(false);
   const [configDateFormat, setConfigDateFormat] = useState<DateFormat>(dateFormat);
-  const [nodes, setNodes, onNodesChange] = useNodesState<PersonFlowNode>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge<RelationEdgeData>>([]);
+  const [nodes, setNodes, onNodesChangeOriginal] = useNodesState<PersonFlowNode>([]);
+  const [edges, setEdges, onEdgesChangeOriginal] = useEdgesState<Edge<RelationEdgeData>>([]);
+
+  const onNodesChange = useCallback((changes: any) => {
+    onNodesChangeOriginal(changes);
+  }, [onNodesChangeOriginal]);
+
+  const onEdgesChange = useCallback((changes: any) => {
+    // If a partner edge is deleted, delete its associated anchor node
+    changes.forEach((change: any) => {
+      if (change.type === 'remove') {
+        const edge = edges.find(e => e.id === change.id);
+        if (edge?.type === 'partner') {
+          const anchorId = `anchor-${edge.id}`;
+          setNodes(nds => nds.filter(n => n.id !== anchorId));
+        }
+      }
+    });
+    onEdgesChangeOriginal(changes);
+  }, [edges, onEdgesChangeOriginal, setNodes]);
 
   // Register setters with history context once
   useEffect(() => {
@@ -179,7 +201,22 @@ export function App() {
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
-      pushSnapshot(nodes, edges);
+      pushSnapshot(nodes as PersonFlowNode[], edges);
+
+      // Handle connection from PartnerEdge anchor
+      const isAnchorSource = connection.source.startsWith('anchor-');
+      if (isAnchorSource || connection.sourceHandle === 'partner-anchor') {
+        const childId = connection.target;
+        const sourceNodeId = isAnchorSource ? connection.source : `anchor-${connection.source}`;
+        setEdges((eds) => [
+          ...eds,
+          createRelationEdge(sourceNodeId, childId, 'parent-child', {
+            sourceHandle: 'anchor-source',
+            targetHandle: 'top-target'
+          }),
+        ]);
+        return;
+      }
 
       if (relationDraft && (connection.source === relationDraft.sourceId || connection.target === relationDraft.sourceId)) {
         const otherId = connection.source === relationDraft.sourceId ? connection.target : connection.source;
@@ -187,20 +224,83 @@ export function App() {
 
         if (relationDraft.side === 'left') {
           // Left side relation: visually left->right by swapping source/target
+          const edgeId = crypto.randomUUID();
           const edge = createRelationEdge(otherId, relationDraft.sourceId, 'partner', {
+            id: edgeId,
             sourceHandle: 'bottom-source',
             targetHandle: 'bottom-target'
           });
           setEdges((eds) => addEdge(edge, eds));
+
+          // Create anchor node
+          const sourceNode = nodes.find(n => n.id === otherId);
+          const targetNode = nodes.find(n => n.id === relationDraft.sourceId);
+          if (sourceNode && targetNode) {
+            const anchorX = (sourceNode.position.x + targetNode.position.x) / 2;
+            const anchorY = Math.max(sourceNode.position.y, targetNode.position.y) + 40;
+            const anchorNode: PersonFlowNode = {
+              id: `anchor-${edgeId}`,
+              type: 'anchor',
+              position: { x: anchorX, y: anchorY },
+              data: { name: '', sex: 'unknown', symbol: 'unknown', deceased: false, isAnchor: true },
+              draggable: false,
+            };
+            setNodes(nds => [...nds, anchorNode]);
+          }
         } else {
+          const edgeId = crypto.randomUUID();
           const edge = createRelationEdge(relationDraft.sourceId, otherId, 'partner', {
+            id: edgeId,
             sourceHandle: 'bottom-source',
             targetHandle: 'bottom-target'
           });
           setEdges((eds) => addEdge(edge, eds));
+
+          // Create anchor node
+          const sourceNode = nodes.find(n => n.id === relationDraft.sourceId);
+          const targetNode = nodes.find(n => n.id === otherId);
+          if (sourceNode && targetNode) {
+            const anchorX = (sourceNode.position.x + targetNode.position.x) / 2;
+            const anchorY = Math.max(sourceNode.position.y, targetNode.position.y) + 40;
+            const anchorNode: PersonFlowNode = {
+              id: `anchor-${edgeId}`,
+              type: 'anchor',
+              position: { x: anchorX, y: anchorY },
+              data: { name: '', sex: 'unknown', symbol: 'unknown', deceased: false, isAnchor: true },
+              draggable: false,
+            };
+            setNodes(nds => [...nds, anchorNode]);
+          }
         }
 
         setRelationDraft(null);
+        return;
+      }
+
+      if (connection.sourceHandle === 'bottom-source') {
+        const edgeId = crypto.randomUUID();
+        const edge = createRelationEdge(connection.source, connection.target, 'partner', {
+          id: edgeId,
+          sourceHandle: 'bottom-source',
+          targetHandle: 'bottom-target'
+        });
+        setEdges((eds) => addEdge(edge, eds));
+
+        // Create anchor node for this edge
+        const sourceNode = nodes.find(n => n.id === connection.source);
+        const targetNode = nodes.find(n => n.id === connection.target);
+        if (sourceNode && targetNode) {
+          const anchorX = (sourceNode.position.x + targetNode.position.x) / 2;
+          const anchorY = Math.max(sourceNode.position.y, targetNode.position.y) + 40;
+          const anchorNode: PersonFlowNode = {
+            id: `anchor-${edgeId}`,
+            type: 'anchor',
+            position: { x: anchorX, y: anchorY },
+            data: { name: '', sex: 'unknown', symbol: 'unknown', deceased: false, isAnchor: true },
+            draggable: false,
+          };
+          setNodes(nds => [...nds, anchorNode]);
+        }
         return;
       }
 
@@ -371,14 +471,14 @@ export function App() {
       // Re-apply style, type, handles and animated based on relation — these are not stored by backend
       const edgesRestored = loaded.edges.map((edge) => {
         const rel = edge.data?.relation ?? 'parent-child';
-        const isPartner = rel === 'partner';
+        const isPartner = rel === 'partner' || rel === 'divorce';
         return {
           ...edge,
-          type: isPartner ? 'straight' : 'smoothstep',
+          type: isPartner ? 'partner' : 'smoothstep',
           style: relationStyle(rel),
           animated: rel === 'adoption',
-          sourceHandle: isPartner ? (edge.sourceHandle || 'right-source') : edge.sourceHandle,
-          targetHandle: isPartner ? (edge.targetHandle || 'left-target') : edge.targetHandle,
+          sourceHandle: isPartner ? (edge.sourceHandle || 'bottom-source') : edge.sourceHandle,
+          targetHandle: isPartner ? (edge.targetHandle || 'bottom-target') : edge.targetHandle,
           markerEnd: undefined,
         };
       });
@@ -1082,7 +1182,7 @@ export function App() {
                 const pHpx = Math.floor((pHmm - 2 * marginMm) * pxPerMm);
 
                 const allNodes = reactFlowInstance.getNodes();
-                const bounds = allNodes.length > 0 ? getNodesBounds(allNodes) : { x: 0, y: 0, width: 0, height: 0 };
+                const bounds = allNodes.length > 0 ? getNodesBounds(allNodes) : { x: 0, y: 0, width: 0, height: 0, right: 0, bottom: 0 };
                 const padding = 20;
                 const diagramW = (bounds.width + padding * 2) * printScale;
                 const diagramH = (bounds.height + padding * 2) * printScale;

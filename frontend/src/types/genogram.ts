@@ -15,6 +15,7 @@ export type PersonNodeData = {
   deathDate?: string;
   deceased: boolean;
   notes?: string;
+  isAnchor?: boolean;
 };
 
 export type RelationEdgeData = {
