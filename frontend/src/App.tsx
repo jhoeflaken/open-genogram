@@ -205,12 +205,12 @@ export function App() {
 
       // Handle connection from PartnerEdge anchor
       const isAnchorSource = connection.source.startsWith('anchor-');
-      if (isAnchorSource || connection.sourceHandle === 'partner-anchor') {
+      if (isAnchorSource || connection.sourceHandle === 'anchor-source') {
         const childId = connection.target;
-        const sourceNodeId = isAnchorSource ? connection.source : `anchor-${connection.source}`;
+        const sourceNodeId = isAnchorSource ? connection.source : connection.source; // it is already the id if it came from Handle on AnchorNode
         setEdges((eds) => [
           ...eds,
-          createRelationEdge(sourceNodeId, childId, 'parent-child', {
+          createRelationEdge(connection.source, childId, 'parent-child', {
             sourceHandle: 'anchor-source',
             targetHandle: 'top-target'
           }),
@@ -307,7 +307,7 @@ export function App() {
       const edge = createRelationEdge(connection.source, connection.target, 'parent-child');
       setEdges((eds) => addEdge(edge, eds));
     },
-    [edges, nodes, pushSnapshot, relationDraft, setEdges]
+    [edges, nodes, pushSnapshot, relationDraft, setEdges, setNodes]
   );
 
   const onSelectionChange = useCallback((selection: OnSelectionChangeParams) => {

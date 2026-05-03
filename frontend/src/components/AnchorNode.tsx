@@ -18,6 +18,14 @@ export function AnchorNode({ id, data, xPos, yPos }: NodeProps<PersonFlowNode>) 
     setMenuAnchor({ x: event.clientX, y: event.clientY });
   }, []);
 
+  const onHandleMouseDown = useCallback((event: React.MouseEvent) => {
+    // If the click is on the handle background (not the plus text, though plus has pointer-events: none)
+    // we want to allow dragging for connection.
+    // If we want to support both clicking for menu and dragging for connection,
+    // React Flow's Handle usually handles dragging.
+    // We just need to make sure we don't preventDefault if we want to allow connection dragging.
+  }, []);
+
   useEffect(() => {
     if (!menuAnchor) return;
     const onDocPointerDown = (event: PointerEvent) => {
@@ -37,14 +45,19 @@ export function AnchorNode({ id, data, xPos, yPos }: NodeProps<PersonFlowNode>) 
   }, [menuAnchor]);
 
   const addChild = (symbol: PersonSymbol) => {
-    pushSnapshot(getNodes() as PersonFlowNode[], getEdges());
+    const currentNodes = getNodes() as PersonFlowNode[];
+    const currentEdges = getEdges();
+    pushSnapshot(currentNodes, currentEdges);
 
     const childID = crypto.randomUUID();
+    const x = typeof xPos === 'number' && !isNaN(xPos) ? xPos : 0;
+    const y = typeof yPos === 'number' && !isNaN(yPos) ? yPos : 0;
+
     const childNode = createPersonNode(
       childID,
       symbol,
-      xPos,
-      yPos + 100,
+      x,
+      y + 100,
       symbol === 'male' ? 'Son' : 'Daughter',
       ''
     );
@@ -65,6 +78,7 @@ export function AnchorNode({ id, data, xPos, yPos }: NodeProps<PersonFlowNode>) 
         position={Position.Bottom}
         id="anchor-source"
         onClick={onHandleClick}
+        onMouseDown={onHandleMouseDown}
         style={{
           ...actionHandleBase,
           cursor: 'pointer',
@@ -78,7 +92,8 @@ export function AnchorNode({ id, data, xPos, yPos }: NodeProps<PersonFlowNode>) 
           background: '#fff',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          pointerEvents: 'all'
         }}
       >
         <span style={{ ...plusGlyphStyle, pointerEvents: 'none', userSelect: 'none' }}>+</span>
