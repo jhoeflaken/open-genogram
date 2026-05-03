@@ -54,7 +54,7 @@ import type { Diagram, PersonFlowNode, PersonNodeData, PersonSymbol, RelationEdg
 const nodeTypes: NodeTypes = { person: PersonNode };
 const ASIDE_MIN_WIDTH = 280;
 const ASIDE_MAX_WIDTH = 720;
-const ASIDE_COLLAPSED_WIDTH = 28;
+const ASIDE_COLLAPSED_WIDTH = 0;
 
 export function App() {
   const { dateFormat, setDateFormat } = useAppSettings();
@@ -92,7 +92,7 @@ export function App() {
   const [asideCollapsed, setAsideCollapsed] = useState(false);
   const [asideWidth, setAsideWidth] = useState(340);
   const [asideLastExpandedWidth, setAsideLastExpandedWidth] = useState(340);
-  const asideResizingRef = useRef(false);
+  const asideDragRef = useRef<{ startX: number; startWidth: number; moved: boolean } | null>(null);
 
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
   const selectedEdge = useMemo(() => edges.find((e) => e.id === selectedEdgeId) ?? null, [edges, selectedEdgeId]);
@@ -481,27 +481,41 @@ export function App() {
     setAsideCollapsed(true);
   }, [asideCollapsed, asideLastExpandedWidth, asideWidth]);
 
-  const startAsideResize = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
-    if (asideCollapsed) return;
+  const onAsideHandleMouseDown = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
-    asideResizingRef.current = true;
+    asideDragRef.current = {
+      startX: event.clientX,
+      startWidth: asideCollapsed ? asideLastExpandedWidth : asideWidth,
+      moved: false,
+    };
 
     const onMouseMove = (moveEvent: MouseEvent) => {
-      if (!asideResizingRef.current) return;
-      const nextWidth = Math.max(ASIDE_MIN_WIDTH, Math.min(ASIDE_MAX_WIDTH, window.innerWidth - moveEvent.clientX));
+      const state = asideDragRef.current;
+      if (!state) return;
+
+      const delta = state.startX - moveEvent.clientX;
+      if (Math.abs(delta) >= 4) state.moved = true;
+
+      const nextWidth = Math.max(ASIDE_MIN_WIDTH, Math.min(ASIDE_MAX_WIDTH, state.startWidth + delta));
       setAsideWidth(nextWidth);
       setAsideLastExpandedWidth(nextWidth);
+      if (asideCollapsed) setAsideCollapsed(false);
     };
 
     const onMouseUp = () => {
-      asideResizingRef.current = false;
+      const state = asideDragRef.current;
+      asideDragRef.current = null;
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
+
+      if (!state?.moved) {
+        toggleAside();
+      }
     };
 
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
-  }, [asideCollapsed]);
+  }, [asideCollapsed, asideLastExpandedWidth, asideWidth, toggleAside]);
 
   return (
     <AppShell
@@ -671,9 +685,20 @@ export function App() {
 
       <AppShell.Aside className="details-aside-shell">
         <div className="details-aside-root">
-          {!asideCollapsed && <div className="details-aside-resizer" onMouseDown={startAsideResize} />}
-          <button type="button" className="details-aside-toggle" onClick={toggleAside} aria-label={asideCollapsed ? 'Expand details panel' : 'Collapse details panel'}>
-            {asideCollapsed ? <IconChevronLeft size={14} /> : <IconChevronRight size={14} />}
+          <button
+            type="button"
+            className="details-aside-toggle"
+            onMouseDown={onAsideHandleMouseDown}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggleAside();
+              }
+            }}
+            aria-label={asideCollapsed ? 'Expand details panel' : 'Collapse details panel'}
+            title={asideCollapsed ? 'Expand (click) or resize (drag)' : 'Collapse (click) or resize (drag)'}
+          >
+            {asideCollapsed ? <IconChevronLeft size={20} /> : <IconChevronRight size={20} />}
           </button>
           {!asideCollapsed && (
             <DetailsPanel
