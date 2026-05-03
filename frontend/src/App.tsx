@@ -22,9 +22,9 @@ import {
   IconArrowForwardUp,
   IconArrowsHorizontal,
   IconArrowsVertical,
-  IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
+  IconChevronDown,
   IconDeviceFloppy,
   IconFilePlus,
   IconFolderOpen,
@@ -473,7 +473,8 @@ export function App() {
 
   const toggleAside = useCallback(() => {
     if (asideCollapsed) {
-      setAsideWidth(Math.min(ASIDE_MAX_WIDTH, Math.max(ASIDE_MIN_WIDTH, asideLastExpandedWidth)));
+      const restoreWidth = Math.min(ASIDE_MAX_WIDTH, Math.max(ASIDE_MIN_WIDTH, asideLastExpandedWidth));
+      setAsideWidth(restoreWidth);
       setAsideCollapsed(false);
       return;
     }
@@ -481,13 +482,8 @@ export function App() {
     setAsideCollapsed(true);
   }, [asideCollapsed, asideLastExpandedWidth, asideWidth]);
 
-  const onAsideHandleMouseDown = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    asideDragRef.current = {
-      startX: event.clientX,
-      startWidth: asideCollapsed ? asideLastExpandedWidth : asideWidth,
-      moved: false,
-    };
+  const startAsideResizeDrag = useCallback((startX: number, startWidth: number, onClickWithoutDrag?: () => void) => {
+    asideDragRef.current = { startX, startWidth, moved: false };
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       const state = asideDragRef.current;
@@ -508,14 +504,21 @@ export function App() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
 
-      if (!state?.moved) {
-        toggleAside();
-      }
+      if (!state?.moved && onClickWithoutDrag) onClickWithoutDrag();
     };
 
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
-  }, [asideCollapsed, asideLastExpandedWidth, asideWidth, toggleAside]);
+  }, [asideCollapsed]);
+
+  const onAsideHandleMouseDown = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    startAsideResizeDrag(
+      event.clientX,
+      asideCollapsed ? asideLastExpandedWidth : asideWidth,
+      toggleAside,
+    );
+  }, [asideCollapsed, asideLastExpandedWidth, asideWidth, startAsideResizeDrag, toggleAside]);
 
   return (
     <AppShell
