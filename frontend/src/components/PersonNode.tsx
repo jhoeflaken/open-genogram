@@ -33,7 +33,7 @@ const NAME_LINE_H = Math.round(13 * 1.35);
 const NAME_LINES = 3;
 
 // Shared style for the action handle boxes (+ and empty side handles)
-const actionHandleBase: CSSProperties = {
+export const actionHandleBase: CSSProperties = {
   width: 18,
   height: 18,
   borderRadius: 4,
@@ -51,14 +51,14 @@ const actionHandleBase: CSSProperties = {
   userSelect: 'none',
 };
 
-const plusGlyphStyle: CSSProperties = {
+export const plusGlyphStyle: CSSProperties = {
   display: 'block',
   lineHeight: 1,
   transform: 'translateY(-0.5px)'
 };
 
 // Sibling picker popup anchored to left or right of card
-function MenuBtn({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+export function MenuBtn({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
   return (
     <button className="sibling-menu-btn" style={siblingBtnStyle} onClick={onClick}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -71,12 +71,25 @@ function MenuBtn({ icon, label, onClick }: { icon: ReactNode; label: string; onC
   );
 }
 
-function siblingMenuStyle(anchor: { side: 'left' | 'right'; x: number; y: number }): CSSProperties {
+export function siblingMenuStyle(anchor: { side: 'left' | 'right' | 'bottom'; x: number; y: number }): CSSProperties {
+  let transform = '';
+  let left = anchor.x;
+  if (anchor.side === 'left') {
+    transform = 'translate(-100%, -50%)';
+    left -= 8;
+  } else if (anchor.side === 'right') {
+    transform = 'translate(0, -50%)';
+    left += 8;
+  } else {
+    // bottom
+    transform = 'translate(-50%, 0)';
+  }
+
   return {
     position: 'fixed',
-    top: anchor.y,
-    left: anchor.side === 'left' ? anchor.x - 8 : anchor.x + 8,
-    transform: anchor.side === 'left' ? 'translate(-100%, -50%)' : 'translate(0, -50%)',
+    top: anchor.y + (anchor.side === 'bottom' ? 8 : 0),
+    left: left,
+    transform,
     background: '#fff',
     border: '1.5px solid #bfcbff',
     borderRadius: 8,

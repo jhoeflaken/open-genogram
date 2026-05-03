@@ -19,6 +19,7 @@ export type PersonNodeData = {
 
 export type RelationEdgeData = {
   relation: RelationType;
+  anchor?: number; // 0.0 to 1.0 along the horizontal line
 };
 
 export type PersonNode = Node<PersonNodeData, 'person'>;

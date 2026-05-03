@@ -37,12 +37,14 @@ import {
   IconPointer,
   IconPrinter,
   IconSettings,
+  IconTournament,
   IconTrash
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { DetailsPanel } from './components/DetailsPanel';
 import { Palette } from './components/Palette';
 import { PersonNode } from './components/PersonNode';
+import { PartnerEdge } from './components/PartnerEdge';
 import { createDiagram, getDiagram, listDiagrams, updateDiagram } from './api/client';
 import type { DiagramSummary } from './api/client';
 import { createPersonNode, createRelationEdge, relationStyle, updateEdgeRelation } from './lib/diagram';
@@ -55,6 +57,9 @@ import type { DateFormat } from './lib/dateFormat';
 import type { Diagram, PersonFlowNode, PersonNodeData, PersonSymbol, RelationEdgeData } from './types/genogram';
 
 const nodeTypes: NodeTypes = { person: PersonNode };
+const edgeTypes = {
+  partner: PartnerEdge,
+};
 const ASIDE_EXPANDED_WIDTH = 340;
 const ASIDE_COLLAPSED_WIDTH = 0;
 const ASIDE_MIN_WIDTH = 260;
@@ -99,10 +104,77 @@ export function App() {
   const [printPaperSize, setPrintPaperSize] = useState<'A4' | 'A3' | 'A0'>('A4');
   const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('landscape');
   const [printScale, setPrintScale] = useState(1.0);
+  const [highlightLineage, setHighlightLineage] = useState(false);
 
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
   const selectedEdge = useMemo(() => edges.find((e) => e.id === selectedEdgeId) ?? null, [edges, selectedEdgeId]);
   const selectedNodes = useMemo(() => nodes.filter((n) => selectedNodeIds.includes(n.id)), [nodes, selectedNodeIds]);
+
+  const selectedNodeIdsSet = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
+
+  const lineageData = useMemo(() => {
+    if (!highlightLineage || !selectedNodeId) return null;
+
+    const predecessors = new Set<string>();
+    const successors = new Set<string>();
+    const highlightedEdges = new Set<string>();
+
+    const findPredecessors = (nodeId: string) => {
+      edges.forEach((edge) => {
+        if (edge.target === nodeId) {
+          if (!predecessors.has(edge.source)) {
+            predecessors.add(edge.source);
+            highlightedEdges.add(edge.id);
+            findPredecessors(edge.source);
+          }
+        }
+      });
+    };
+
+    const findSuccessors = (nodeId: string) => {
+      edges.forEach((edge) => {
+        if (edge.source === nodeId) {
+          if (!successors.has(edge.target)) {
+            successors.add(edge.target);
+            highlightedEdges.add(edge.id);
+            findSuccessors(edge.target);
+          }
+        }
+      });
+    };
+
+    findPredecessors(selectedNodeId);
+    findSuccessors(selectedNodeId);
+
+    return {
+      nodes: new Set([...predecessors, ...successors, selectedNodeId]),
+      edges: highlightedEdges
+    };
+  }, [highlightLineage, selectedNodeId, edges]);
+
+  const styledNodes = useMemo(() => {
+    if (!lineageData) return nodes;
+    return nodes.map((n) => ({
+      ...n,
+      style: {
+        ...n.style,
+        opacity: lineageData.nodes.has(n.id) ? 1 : 0.25,
+        transition: 'opacity 200ms'
+      }
+    }));
+  }, [nodes, lineageData]);
+
+  const styledEdges = useMemo(() => {
+    if (!lineageData) return edges;
+    return edges.map((e) => ({
+      ...e,
+      style: {
+        ...e.style,
+        opacity: lineageData.edges.has(e.id) ? 1 : 0.1,
+        transition: 'opacity 200ms'
+      }
+    }));
+  }, [edges, lineageData]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -712,6 +784,15 @@ export function App() {
                 <IconLayoutAlignLeft size={18} />
               </ActionIcon>
             </Tooltip>
+            <Tooltip label="Highlight Lineage (toggle)">
+              <ActionIcon
+                variant={highlightLineage ? 'filled' : 'subtle'}
+                aria-label="Highlight Lineage"
+                onClick={() => setHighlightLineage((v) => !v)}
+              >
+                <IconTournament size={18} />
+              </ActionIcon>
+            </Tooltip>
             <Divider orientation="vertical" mx={4} />
             <Tooltip label="Undo (Ctrl+Z)">
               <ActionIcon variant="subtle" aria-label="Undo" disabled={!canUndo} onClick={undo}>
@@ -757,9 +838,10 @@ export function App() {
           </Group>
           <div className="flow-wrapper" onDrop={handleDrop} onDragOver={handleDragOver}>
           <ReactFlow
-            nodes={nodes}
-            edges={edges}
+            nodes={styledNodes}
+            edges={styledEdges}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             onInit={setReactFlowInstance}
             fitView
             deleteKeyCode={null}

@@ -39,9 +39,9 @@ export function createRelationEdge(
     target,
     sourceHandle: options?.sourceHandle,
     targetHandle: options?.targetHandle,
-    type: isPartner ? 'smoothstep' : 'smoothstep',
+    type: isPartner ? 'partner' : 'smoothstep',
     style: relationStyle(relation),
-    data: { relation },
+    data: { relation, anchor: 0.5 },
     animated: relation === 'adoption',
     pathOptions: isPartner ? { borderRadius: 40 } : undefined
   };

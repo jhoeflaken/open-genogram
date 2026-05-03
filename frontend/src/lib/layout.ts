@@ -76,85 +76,104 @@ export function performLayout(
     if (!levels.has(n.id)) levels.set(n.id, 0);
   });
 
-  // 3. Group nodes by generation and order by age (old to young -> Right to Left)
-  const nodesByLevel = new Map<number, PersonFlowNode[]>();
-  nodes.forEach((node) => {
-    const level = levels.get(node.id) || 0;
-    if (!nodesByLevel.has(level)) nodesByLevel.set(level, []);
-    nodesByLevel.get(level)!.push(node);
-  });
+  // 3. Recursive positioning to maintain hierarchy
+  const finalNodes = [...nodes];
+  const nodeMap = new Map(finalNodes.map(n => [n.id, n]));
+  const positioned = new Set<string>();
 
   const getAgeScore = (node: PersonFlowNode): number => {
     const birthDate = parseConfiguredDate(node.data.birthDate, dateFormat);
     return birthDate ? birthDate.getTime() : 0;
   };
 
-  const sortedLevels = Array.from(nodesByLevel.keys()).sort((a, b) => a - b);
-  
-  const finalNodes = [...nodes];
-  const nodeMap = new Map(finalNodes.map(n => [n.id, n]));
+  // Function to get "family unit" key for siblings
+  const getFamilyKey = (nodeId: string): string => {
+    const parents = (parentsOf.get(nodeId) || []).sort();
+    return parents.length > 0 ? parents.join('+') : `root-${nodeId}`;
+  };
 
-  sortedLevels.forEach((level) => {
-    const levelNodes = nodesByLevel.get(level)!;
+  const positionNode = (nodeId: string, x: number, level: number): number => {
+    if (positioned.has(nodeId)) return x;
     
-    // Sort siblings by age: Oldest should be on the RIGHT
-    // "brother and sisters should be from right to left in order from age old to young"
-    // Right = Old, Left = Young.
+    const node = nodeMap.get(nodeId)!;
+    const partners = (partnersOf.get(nodeId) || []).filter(pid => levels.get(pid) === level);
     
-    levelNodes.sort((a, b) => {
-      const ageA = getAgeScore(a);
-      const ageB = getAgeScore(b);
-      return ageA - ageB; // Oldest first (will get largest X)
+    // Group node with its partners
+    const familyGroup = [nodeId, ...partners];
+    familyGroup.forEach(id => positioned.add(id));
+
+    // Place the group centered around x
+    const groupWidth = (familyGroup.length - 1) * HORIZONTAL_SPACING;
+    let startX = x + (groupWidth / 2);
+
+    familyGroup.forEach((id, idx) => {
+      const n = nodeMap.get(id)!;
+      // Reverse order: oldest on the right
+      // We sorted roots and children, but familyGroup is [nodeId, ...partners]
+      // Let's ensure familyGroup is also sorted by age if they are siblings or just use the order.
+      n.position = { x: startX - (idx * HORIZONTAL_SPACING), y: level * VERTICAL_SPACING };
     });
 
-    // We want to try to center children under their parents
-    // and keep partners together.
-    // For now, let's just group partners and their children.
-    
-    // Grouping nodes by partnership
-    const processed = new Set<string>();
-    const groups: string[][] = [];
+    // Now position children of this family group
+    // Collect all children of all partners in this group
+    const allChildren = new Set<string>();
+    familyGroup.forEach(id => {
+      (childrenOf.get(id) || []).forEach(cid => allChildren.add(cid));
+    });
 
-    levelNodes.forEach(node => {
-      if (processed.has(node.id)) return;
+    if (allChildren.size > 0) {
+      const childrenList = Array.from(allChildren).map(cid => nodeMap.get(cid)!);
       
-      const group = [node.id];
-      processed.add(node.id);
-      
-      const partners = (partnersOf.get(node.id) || []).filter(pid => levels.get(pid) === level);
-      partners.forEach(pid => {
-        if (!processed.has(pid)) {
-          group.push(pid);
-          processed.add(pid);
-        }
-      });
-      groups.push(group);
-    });
+      // Sort children by age (oldest right, youngest left)
+      // getAgeScore returns timestamp, so smaller timestamp = older
+      childrenList.sort((a, b) => getAgeScore(a) - getAgeScore(b));
 
-    // Simple horizontal placement of groups
-    let currentX = 0;
-    // We reverse groups because the requirement is right-to-left for age.
-    // Actually if we iterate normally but assign decreasing X, it works.
-    
-    // Calculate total width first to center
-    let totalWidth = 0;
-    groups.forEach((group, gIdx) => {
-      totalWidth += (group.length * HORIZONTAL_SPACING);
-      if (gIdx < groups.length - 1) totalWidth += HORIZONTAL_SPACING; // gap between sibling groups
-    });
+      // Calculate width for children
+      const childrenWidth = (childrenList.length - 1) * HORIZONTAL_SPACING;
+      // Center children under the family group
+      // The family group is centered at 'x'
+      let childX = x + (childrenWidth / 2);
 
-    let x = totalWidth / 2;
-    groups.forEach((group) => {
-      group.forEach((nodeId) => {
-        const n = nodeMap.get(nodeId)!;
-        n.position = {
-          x: x,
-          y: level * VERTICAL_SPACING
-        };
-        x -= HORIZONTAL_SPACING;
+      // If there's a partnership, children should "spin off" from it.
+      // This means childX is relative to the center of parents.
+      // We already use 'x' as the center of the family group.
+
+      childrenList.forEach(child => {
+        positionNode(child.id, childX, level + 1);
+        childX -= HORIZONTAL_SPACING;
       });
-      x -= HORIZONTAL_SPACING / 2; // Extra gap between groups
+    }
+
+    return x;
+  };
+
+  // Start positioning from root nodes, but grouped by "family" if they are siblings
+  const rootsByFamily = new Map<string, string[]>();
+  rootNodes.forEach(node => {
+    const key = getFamilyKey(node.id);
+    if (!rootsByFamily.has(key)) rootsByFamily.set(key, []);
+    rootsByFamily.get(key)!.push(node.id);
+  });
+
+  let currentRootX = 0;
+  rootsByFamily.forEach((rootIds) => {
+    const rootFamilyNodes = rootIds.map(id => nodeMap.get(id)!);
+    rootFamilyNodes.sort((a, b) => getAgeScore(a) - getAgeScore(b));
+
+    rootFamilyNodes.forEach(node => {
+      if (!positioned.has(node.id)) {
+        positionNode(node.id, currentRootX, levels.get(node.id) || 0);
+        currentRootX -= HORIZONTAL_SPACING * 2; // Gap between families
+      }
     });
+  });
+
+  // Ensure any orphaned nodes are also positioned
+  nodes.forEach(node => {
+    if (!positioned.has(node.id)) {
+      positionNode(node.id, currentRootX, levels.get(node.id) || 0);
+      currentRootX -= HORIZONTAL_SPACING * 2;
+    }
   });
 
   // 4. Update edge types and handles
@@ -162,16 +181,25 @@ export function performLayout(
     const isPartner = edge.data?.relation === 'partner' || edge.data?.relation === 'divorce';
     
     if (isPartner) {
+      // Find the source and target nodes to calculate base anchor
+      const sNode = nodeMap.get(edge.source);
+      const tNode = nodeMap.get(edge.target);
+      let anchor = edge.data?.anchor ?? 0.5;
+
       return {
         ...edge,
-        type: 'smoothstep',
+        type: 'partner',
         sourceHandle: 'bottom-source',
         targetHandle: 'bottom-target',
         style: { ...edge.style, strokeWidth: 2 },
-        pathOptions: { borderRadius: 40 }
+        data: { ...edge.data, anchor },
       };
     }
-    
+
+    const isChildOfPartner = Array.from(partnersOf.values()).some(partners => 
+        partners.includes(edge.source)
+    );
+
     return {
       ...edge,
       sourceHandle: 'bottom-source',
