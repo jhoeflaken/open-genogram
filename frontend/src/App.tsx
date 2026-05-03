@@ -16,6 +16,7 @@ import {
   type OnSelectionChangeParams,
   type XYPosition
 } from '@xyflow/react';
+import { getNodesBounds, getViewportForBounds } from '@xyflow/react';
 import { ActionIcon, AppShell, Button, Divider, Group, Loader, Menu, Modal, Select, Stack, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import {
   IconArrowBackUp,
@@ -475,6 +476,58 @@ export function App() {
     setAsideCollapsed((prev) => !prev);
   }, []);
 
+  const handlePrint = useCallback(() => {
+    if (!reactFlowInstance) {
+      window.print();
+      return;
+    }
+
+    const savedViewport = reactFlowInstance.getViewport();
+
+    const onAfterPrint = () => {
+      window.removeEventListener('afterprint', onAfterPrint);
+      void reactFlowInstance.setViewport(savedViewport, { duration: 200 });
+    };
+    window.addEventListener('afterprint', onAfterPrint);
+
+    const allNodes = reactFlowInstance.getNodes();
+
+    if (allNodes.length > 0) {
+      // Calculate exact bounds of all nodes
+      const bounds = getNodesBounds(allNodes);
+
+      // Find the ReactFlow viewport DOM element
+      const viewportEl = document.querySelector('.react-flow__viewport') as HTMLElement | null;
+      const wrapperEl = document.querySelector('.flow-wrapper') as HTMLElement | null;
+
+      if (viewportEl && wrapperEl) {
+        const w = wrapperEl.clientWidth;
+        const h = wrapperEl.clientHeight;
+
+        // Compute viewport transform that fits all nodes with padding
+        const vp = getViewportForBounds(bounds, w, h, 0.1, 2, 0.08);
+
+        // Apply transform directly to DOM — bypasses React's async rendering
+        viewportEl.style.transform = `translate(${vp.x}px,${vp.y}px) scale(${vp.zoom})`;
+
+        // Restore the element's inline style after printing
+        const prevTransform = viewportEl.style.transform;
+        const onAfterPrintTransform = () => {
+          window.removeEventListener('afterprint', onAfterPrintTransform);
+          viewportEl.style.transform = '';
+        };
+        window.removeEventListener('afterprint', onAfterPrint); // re-add together
+        window.addEventListener('afterprint', () => {
+          viewportEl.style.transform = '';
+          void reactFlowInstance.setViewport(savedViewport, { duration: 200 });
+        }, { once: true });
+        void prevTransform; // suppress unused warning
+      }
+    }
+
+    window.print();
+  }, [reactFlowInstance]);
+
   const onAsideResizeMouseDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     if (asideCollapsed) return;
     event.preventDefault();
@@ -546,7 +599,7 @@ export function App() {
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Print">
-              <ActionIcon variant="subtle" aria-label="Print" onClick={() => window.print()}>
+              <ActionIcon variant="subtle" aria-label="Print" onClick={handlePrint}>
                 <IconPrinter size={18} />
               </ActionIcon>
             </Tooltip>
