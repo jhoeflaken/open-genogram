@@ -64,6 +64,17 @@ body,
   bottom: 0;
 }
 
+.details-aside-resize-strip {
+  position: absolute;
+  left: -5px;
+  top: calc(var(--aside-handle-top) + var(--aside-handle-height));
+  bottom: 0;
+  width: 10px;
+  cursor: ew-resize;
+  z-index: 20;
+  background: transparent;
+}
+
 .details-aside-toggle {
   position: absolute;
   left: calc(-1 * var(--aside-handle-width));

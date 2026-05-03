@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { DragEvent } from 'react';
+import type { DragEvent, MouseEvent as ReactMouseEvent } from 'react';
 import {
   addEdge,
   Background,
@@ -54,6 +54,8 @@ import type { Diagram, PersonFlowNode, PersonNodeData, PersonSymbol, RelationEdg
 const nodeTypes: NodeTypes = { person: PersonNode };
 const ASIDE_EXPANDED_WIDTH = 340;
 const ASIDE_COLLAPSED_WIDTH = 0;
+const ASIDE_MIN_WIDTH = 260;
+const ASIDE_MAX_WIDTH = 720;
 
 export function App() {
   const { dateFormat, setDateFormat } = useAppSettings();
@@ -89,6 +91,7 @@ export function App() {
   const [relationDraft, setRelationDraft] = useState<{ sourceId: string; side: 'left' | 'right' } | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [asideCollapsed, setAsideCollapsed] = useState(false);
+  const [asideWidth, setAsideWidth] = useState(ASIDE_EXPANDED_WIDTH);
 
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
   const selectedEdge = useMemo(() => edges.find((e) => e.id === selectedEdgeId) ?? null, [edges, selectedEdgeId]);
@@ -471,11 +474,33 @@ export function App() {
     setAsideCollapsed((prev) => !prev);
   }, []);
 
+  const onAsideResizeMouseDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    if (asideCollapsed) return;
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startWidth = asideWidth;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = startX - moveEvent.clientX;
+      const nextWidth = Math.max(ASIDE_MIN_WIDTH, Math.min(ASIDE_MAX_WIDTH, startWidth + delta));
+      setAsideWidth(nextWidth);
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, [asideCollapsed, asideWidth]);
+
   return (
     <AppShell
       header={{ height: 64 }}
       navbar={{ width: 210, breakpoint: 'sm' }}
-      aside={{ width: asideCollapsed ? ASIDE_COLLAPSED_WIDTH : ASIDE_EXPANDED_WIDTH, breakpoint: 'sm' }}
+      aside={{ width: asideCollapsed ? ASIDE_COLLAPSED_WIDTH : asideWidth, breakpoint: 'sm' }}
       padding={0}
     >
       <AppShell.Header p="sm" style={{ borderBottom: '1px solid #e9ecef' }}>
@@ -639,6 +664,7 @@ export function App() {
 
       <AppShell.Aside className="details-aside-shell">
         <div className="details-aside-root">
+          {!asideCollapsed && <div className="details-aside-resize-strip" onMouseDown={onAsideResizeMouseDown} />}
           <button
             type="button"
             className="details-aside-toggle"
