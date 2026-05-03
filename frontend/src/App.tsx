@@ -16,7 +16,7 @@ import {
   type OnSelectionChangeParams,
   type XYPosition
 } from '@xyflow/react';
-import { getNodesBounds, getViewportForBounds } from '@xyflow/react';
+import { getNodesBounds } from '@xyflow/react';
 import { ActionIcon, AppShell, Button, Divider, Group, Loader, Menu, Modal, Select, Stack, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import {
   IconArrowBackUp,
@@ -483,20 +483,23 @@ export function App() {
     const wrapperEl = document.querySelector('.flow-wrapper') as HTMLElement | null;
     if (!wrapperEl) { window.print(); return; }
 
-    // Synchronously set the viewport transform so all nodes are visible in the clone
+    // Print at a fixed readable zoom (0.9 ≈ full screen node size) so nodes are
+    // legible on paper. The browser will paginate to multiple pages if needed.
+    const PRINT_ZOOM = 0.9;
+
     if (allNodes.length > 0) {
       const bounds = getNodesBounds(allNodes);
-      const w = wrapperEl.clientWidth || 1200;
-      const h = wrapperEl.clientHeight || 800;
-      const vp = getViewportForBounds(bounds, w, h, 0.1, 2, 0.08);
+      // Translate so the diagram starts at the top-left with a small margin
+      const tx = (-bounds.x + 20) * PRINT_ZOOM;
+      const ty = (-bounds.y + 20) * PRINT_ZOOM;
       const vpEl = wrapperEl.querySelector('.react-flow__viewport') as HTMLElement | null;
-      if (vpEl) vpEl.style.transform = `translate(${vp.x}px,${vp.y}px) scale(${vp.zoom})`;
+      if (vpEl) vpEl.style.transform = `translate(${tx}px,${ty}px) scale(${PRINT_ZOOM})`;
     }
 
     // Snapshot the canvas HTML with the new transform applied
     const canvasHTML = wrapperEl.outerHTML;
 
-    // Restore inline style immediately (React will sync back its own transform)
+    // Restore inline style immediately
     const vpEl = wrapperEl.querySelector('.react-flow__viewport') as HTMLElement | null;
     if (vpEl) vpEl.style.transform = '';
 
@@ -506,6 +509,11 @@ export function App() {
     const inlineStyles = Array.from(document.querySelectorAll('style'))
       .map((el) => el.outerHTML).join('\n');
     const rootStyle = document.documentElement.getAttribute('style') ?? '';
+
+    // Compute canvas size at print zoom so the wrapper is tall/wide enough
+    const allBounds = allNodes.length > 0 ? getNodesBounds(allNodes) : null;
+    const canvasW = allBounds ? Math.ceil((allBounds.x + allBounds.width  + 40) * PRINT_ZOOM) : 2400;
+    const canvasH = allBounds ? Math.ceil((allBounds.y + allBounds.height + 40) * PRINT_ZOOM) : 1600;
 
     const printWindow = window.open('', '_blank', 'width=1200,height=900');
     if (!printWindow) { window.print(); return; }
@@ -518,9 +526,13 @@ export function App() {
   ${inlineStyles}
   <style>
     *, *::before, *::after { print-color-adjust: exact; -webkit-print-color-adjust: exact; box-sizing: border-box; }
-    @page { size: auto; margin: 8mm; }
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #fff; }
-    .flow-wrapper { width: 100vw !important; height: 100vh !important; overflow: visible !important; }
+    @page { size: A4 landscape; margin: 8mm; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    .flow-wrapper {
+      width: ${canvasW}px !important;
+      height: ${canvasH}px !important;
+      overflow: visible !important;
+    }
     .react-flow, .react-flow__container, .react-flow__renderer, .react-flow__pane { overflow: visible !important; }
     .action-handle, .react-flow__minimap, .react-flow__controls, .react-flow__background { display: none !important; }
   </style>
