@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DragEvent, MouseEvent as ReactMouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { DragEvent } from 'react';
 import {
   addEdge,
   Background,
@@ -52,8 +52,7 @@ import type { DateFormat } from './lib/dateFormat';
 import type { Diagram, PersonFlowNode, PersonNodeData, PersonSymbol, RelationEdgeData } from './types/genogram';
 
 const nodeTypes: NodeTypes = { person: PersonNode };
-const ASIDE_MIN_WIDTH = 280;
-const ASIDE_MAX_WIDTH = 720;
+const ASIDE_EXPANDED_WIDTH = 340;
 const ASIDE_COLLAPSED_WIDTH = 0;
 
 export function App() {
@@ -90,9 +89,6 @@ export function App() {
   const [relationDraft, setRelationDraft] = useState<{ sourceId: string; side: 'left' | 'right' } | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [asideCollapsed, setAsideCollapsed] = useState(false);
-  const [asideWidth, setAsideWidth] = useState(340);
-  const [asideLastExpandedWidth, setAsideLastExpandedWidth] = useState(340);
-  const asideDragRef = useRef<{ startX: number; startWidth: number; moved: boolean } | null>(null);
 
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
   const selectedEdge = useMemo(() => edges.find((e) => e.id === selectedEdgeId) ?? null, [edges, selectedEdgeId]);
@@ -472,59 +468,14 @@ export function App() {
   }, [edges, nodes, pushSnapshot, reactFlowInstance, redo, removeNodeByID, selectedEdgeId, selectedNodeId, selectedNodeIds, setEdges, setNodes, undo]);
 
   const toggleAside = useCallback(() => {
-    if (asideCollapsed) {
-      const restoreWidth = Math.min(ASIDE_MAX_WIDTH, Math.max(ASIDE_MIN_WIDTH, asideLastExpandedWidth));
-      setAsideWidth(restoreWidth);
-      setAsideCollapsed(false);
-      return;
-    }
-    setAsideLastExpandedWidth(asideWidth);
-    setAsideCollapsed(true);
-  }, [asideCollapsed, asideLastExpandedWidth, asideWidth]);
-
-  const startAsideResizeDrag = useCallback((startX: number, startWidth: number, onClickWithoutDrag?: () => void) => {
-    asideDragRef.current = { startX, startWidth, moved: false };
-
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const state = asideDragRef.current;
-      if (!state) return;
-
-      const delta = state.startX - moveEvent.clientX;
-      if (Math.abs(delta) >= 4) state.moved = true;
-
-      const nextWidth = Math.max(ASIDE_MIN_WIDTH, Math.min(ASIDE_MAX_WIDTH, state.startWidth + delta));
-      setAsideWidth(nextWidth);
-      setAsideLastExpandedWidth(nextWidth);
-      if (asideCollapsed) setAsideCollapsed(false);
-    };
-
-    const onMouseUp = () => {
-      const state = asideDragRef.current;
-      asideDragRef.current = null;
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-
-      if (!state?.moved && onClickWithoutDrag) onClickWithoutDrag();
-    };
-
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  }, [asideCollapsed]);
-
-  const onAsideHandleMouseDown = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    startAsideResizeDrag(
-      event.clientX,
-      asideCollapsed ? asideLastExpandedWidth : asideWidth,
-      toggleAside,
-    );
-  }, [asideCollapsed, asideLastExpandedWidth, asideWidth, startAsideResizeDrag, toggleAside]);
+    setAsideCollapsed((prev) => !prev);
+  }, []);
 
   return (
     <AppShell
       header={{ height: 64 }}
       navbar={{ width: 210, breakpoint: 'sm' }}
-      aside={{ width: asideCollapsed ? ASIDE_COLLAPSED_WIDTH : asideWidth, breakpoint: 'sm' }}
+      aside={{ width: asideCollapsed ? ASIDE_COLLAPSED_WIDTH : ASIDE_EXPANDED_WIDTH, breakpoint: 'sm' }}
       padding={0}
     >
       <AppShell.Header p="sm" style={{ borderBottom: '1px solid #e9ecef' }}>
@@ -691,7 +642,7 @@ export function App() {
           <button
             type="button"
             className="details-aside-toggle"
-            onMouseDown={onAsideHandleMouseDown}
+            onClick={toggleAside}
             onKeyDown={(event) => {
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
@@ -699,7 +650,7 @@ export function App() {
               }
             }}
             aria-label={asideCollapsed ? 'Expand details panel' : 'Collapse details panel'}
-            title={asideCollapsed ? 'Expand (click) or resize (drag)' : 'Collapse (click) or resize (drag)'}
+            title={asideCollapsed ? 'Expand panel' : 'Collapse panel'}
           >
             {asideCollapsed ? <IconChevronLeft size={20} /> : <IconChevronRight size={20} />}
           </button>

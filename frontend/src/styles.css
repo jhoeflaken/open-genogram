@@ -81,7 +81,7 @@ body,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  cursor: ew-resize;
+  cursor: pointer;
   z-index: 50;
   box-shadow: none;
 }
