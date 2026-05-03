@@ -34,6 +34,7 @@ import {
   IconLayoutAlignRight,
   IconLayoutAlignTop,
   IconPointer,
+  IconPrinter,
   IconSettings,
   IconTrash
 } from '@tabler/icons-react';
@@ -542,6 +543,11 @@ export function App() {
             <Tooltip label="Save">
               <ActionIcon variant="subtle" aria-label="Save" onClick={handleSave}>
                 <IconDeviceFloppy size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Print">
+              <ActionIcon variant="subtle" aria-label="Print" onClick={() => window.print()}>
+                <IconPrinter size={18} />
               </ActionIcon>
             </Tooltip>
             <Divider orientation="vertical" mx={4} />

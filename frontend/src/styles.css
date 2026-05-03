@@ -143,3 +143,44 @@ body,
   display: none;
 }
 
+@media print {
+  /* Hide all chrome — only the flow canvas should print */
+  .mantine-AppShell-header,
+  .mantine-AppShell-navbar,
+  .mantine-AppShell-aside,
+  .diagram-toolbar,
+  .details-aside-toggle,
+  .details-aside-resize-strip,
+  .react-flow__minimap,
+  .react-flow__controls,
+  .react-flow__background,
+  .action-handle {
+    display: none !important;
+  }
+
+  /* Let the flow canvas fill the whole page */
+  html, body, #root {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .mantine-AppShell-main {
+    padding: 0 !important;
+    margin: 0 !important;
+    inset: 0 !important;
+    width: 100vw !important;
+  }
+
+  .diagram-main {
+    height: 100vh;
+  }
+
+  .flow-wrapper,
+  .react-flow,
+  .react-flow__renderer {
+    width: 100vw !important;
+    height: 100vh !important;
+  }
+}
+
