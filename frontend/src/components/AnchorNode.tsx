@@ -58,13 +58,11 @@ export function AnchorNode({ id, data, xPos, yPos }: NodeProps<PersonFlowNode>) 
     const childNodeIds = new Set(childEdges.map(e => e.target));
     const siblingNodes = currentNodes.filter(n => childNodeIds.has(n.id));
 
-    let targetX = x;
+    let targetX = x - 240 / 2 + 10; // Center 240px wide node under 20px wide anchor (10 is anchor half-width)
     let targetY = y + 100;
 
     if (siblingNodes.length > 0) {
-      // Find the rightmost sibling to place the next one to its left (since we go right-to-left for old-to-young)
-      // Actually, user said: "to the left or right of any existing child nodes"
-      // Layout usually handles the final order, but for immediate placement:
+      // Find the leftmost sibling to place the next one to its left (right-to-left order)
       const minX = Math.min(...siblingNodes.map(n => n.position.x));
       targetX = minX - 150;
       targetY = siblingNodes[0].position.y;
