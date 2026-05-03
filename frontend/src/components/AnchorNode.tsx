@@ -47,11 +47,13 @@ export function AnchorNode({ id, data, xPos, yPos }: NodeProps<PersonFlowNode>) 
   const addChild = (symbol: PersonSymbol) => {
     const currentNodes = getNodes() as PersonFlowNode[];
     const currentEdges = getEdges();
+    const selfNode = currentNodes.find(n => n.id === id);
+    if (!selfNode) return;
     pushSnapshot(currentNodes, currentEdges);
 
     const childID = crypto.randomUUID();
-    const x = typeof xPos === 'number' && !isNaN(xPos) ? xPos : 0;
-    const y = typeof yPos === 'number' && !isNaN(yPos) ? yPos : 0;
+    const x = selfNode.position.x;
+    const y = selfNode.position.y;
 
     // Find existing children of this anchor to avoid overlap
     const childEdges = currentEdges.filter(e => e.source === id && e.label !== 'partner');

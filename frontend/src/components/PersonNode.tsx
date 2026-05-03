@@ -239,7 +239,7 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
     const anchorNode: PersonFlowNode = {
       id: `anchor-${edgeId}`,
       type: 'anchor',
-      position: { x: current.position.x, y: current.position.y - 160 },
+      position: { x: current.position.x + 120 - 10, y: current.position.y - 120 - 40 },
       data: { name: '', sex: 'unknown', symbol: 'unknown', deceased: false, isAnchor: true },
       draggable: false,
     };
@@ -248,8 +248,7 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
     reactFlow.setEdges((prev) => [
       ...prev,
       partnerEdge,
-      createRelationEdge(fatherID, id, 'parent-child'),
-      createRelationEdge(motherID, id, 'parent-child'),
+      createRelationEdge(anchorNode.id, id, 'parent-child'),
     ]);
   };
 
@@ -334,8 +333,8 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
       reactFlow.setEdges((prev) => [...prev, edge]);
 
       // Create anchor node
-      const anchorX = (x + current.position.x) / 2;
-      const anchorY = Math.max(current.position.y, current.position.y) + 40;
+      const anchorX = (x + current.position.x) / 2 + 120 - 10;
+      const anchorY = current.position.y + 120 + 20;
       const anchorNode: PersonFlowNode = {
         id: `anchor-${edgeId}`,
         type: 'anchor',

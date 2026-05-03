@@ -236,8 +236,8 @@ export function App() {
           const sourceNode = nodes.find(n => n.id === otherId);
           const targetNode = nodes.find(n => n.id === relationDraft.sourceId);
           if (sourceNode && targetNode) {
-            const anchorX = (sourceNode.position.x + targetNode.position.x) / 2;
-            const anchorY = Math.max(sourceNode.position.y, targetNode.position.y) + 40;
+            const anchorX = (sourceNode.position.x + targetNode.position.x) / 2 + 120 - 10;
+            const anchorY = Math.max(sourceNode.position.y, targetNode.position.y) + 120 + 20;
             const anchorNode: PersonFlowNode = {
               id: `anchor-${edgeId}`,
               type: 'anchor',
@@ -260,8 +260,8 @@ export function App() {
           const sourceNode = nodes.find(n => n.id === relationDraft.sourceId);
           const targetNode = nodes.find(n => n.id === otherId);
           if (sourceNode && targetNode) {
-            const anchorX = (sourceNode.position.x + targetNode.position.x) / 2;
-            const anchorY = Math.max(sourceNode.position.y, targetNode.position.y) + 40;
+            const anchorX = (sourceNode.position.x + targetNode.position.x) / 2 + 120 - 10;
+            const anchorY = Math.max(sourceNode.position.y, targetNode.position.y) + 120 + 20;
             const anchorNode: PersonFlowNode = {
               id: `anchor-${edgeId}`,
               type: 'anchor',
@@ -290,8 +290,8 @@ export function App() {
         const sourceNode = nodes.find(n => n.id === connection.source);
         const targetNode = nodes.find(n => n.id === connection.target);
         if (sourceNode && targetNode) {
-          const anchorX = (sourceNode.position.x + targetNode.position.x) / 2;
-          const anchorY = Math.max(sourceNode.position.y, targetNode.position.y) + 40;
+          const anchorX = (sourceNode.position.x + targetNode.position.x) / 2 + 120 - 10;
+          const anchorY = Math.max(sourceNode.position.y, targetNode.position.y) + 120 + 20;
           const anchorNode: PersonFlowNode = {
             id: `anchor-${edgeId}`,
             type: 'anchor',
