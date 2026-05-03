@@ -53,11 +53,28 @@ export function AnchorNode({ id, data, xPos, yPos }: NodeProps<PersonFlowNode>) 
     const x = typeof xPos === 'number' && !isNaN(xPos) ? xPos : 0;
     const y = typeof yPos === 'number' && !isNaN(yPos) ? yPos : 0;
 
+    // Find existing children of this anchor to avoid overlap
+    const childEdges = currentEdges.filter(e => e.source === id && e.label !== 'partner');
+    const childNodeIds = new Set(childEdges.map(e => e.target));
+    const siblingNodes = currentNodes.filter(n => childNodeIds.has(n.id));
+
+    let targetX = x;
+    let targetY = y + 100;
+
+    if (siblingNodes.length > 0) {
+      // Find the rightmost sibling to place the next one to its left (since we go right-to-left for old-to-young)
+      // Actually, user said: "to the left or right of any existing child nodes"
+      // Layout usually handles the final order, but for immediate placement:
+      const minX = Math.min(...siblingNodes.map(n => n.position.x));
+      targetX = minX - 150;
+      targetY = siblingNodes[0].position.y;
+    }
+
     const childNode = createPersonNode(
       childID,
       symbol,
-      x,
-      y + 100,
+      targetX,
+      targetY,
       symbol === 'male' ? 'Son' : 'Daughter',
       ''
     );
