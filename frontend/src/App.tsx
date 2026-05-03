@@ -46,6 +46,7 @@ import { PersonNode } from './components/PersonNode';
 import { createDiagram, getDiagram, listDiagrams, updateDiagram } from './api/client';
 import type { DiagramSummary } from './api/client';
 import { createPersonNode, createRelationEdge, relationStyle, updateEdgeRelation } from './lib/diagram';
+import { performLayout } from './lib/layout';
 import { SYMBOL_DEFINITIONS, symbolToSex } from './lib/genogramSymbols';
 import { DATE_FORMAT_OPTIONS } from './lib/dateFormat';
 import { useAppSettings } from './context/AppSettingsContext';
@@ -115,14 +116,14 @@ export function App() {
         if (relationDraft.side === 'left') {
           // Left side relation: visually left->right by swapping source/target
           const edge = createRelationEdge(otherId, relationDraft.sourceId, 'partner', {
-            sourceHandle: 'right-source',
-            targetHandle: 'left-target'
+            sourceHandle: 'bottom-source',
+            targetHandle: 'bottom-target'
           });
           setEdges((eds) => addEdge(edge, eds));
         } else {
           const edge = createRelationEdge(relationDraft.sourceId, otherId, 'partner', {
-            sourceHandle: 'right-source',
-            targetHandle: 'left-target'
+            sourceHandle: 'bottom-source',
+            targetHandle: 'bottom-target'
           });
           setEdges((eds) => addEdge(edge, eds));
         }
@@ -480,6 +481,19 @@ export function App() {
     setAsideCollapsed((prev) => !prev);
   }, []);
 
+  const handleAutoLayout = useCallback(() => {
+    pushSnapshot(nodes, edges);
+    const { nodes: nextNodes, edges: nextEdges } = performLayout(nodes, edges, dateFormat);
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+    
+    notifications.show({
+      title: 'Layout Applied',
+      message: 'Diagram has been automatically laid out.',
+      color: 'green'
+    });
+  }, [nodes, edges, dateFormat, pushSnapshot, setNodes, setEdges]);
+
   const handlePrint = useCallback(() => {
     if (!reactFlowInstance) { window.print(); return; }
 
@@ -690,6 +704,12 @@ export function App() {
                 onClick={() => setInteractionMode('select')}
               >
                 <IconPointer size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Divider orientation="vertical" mx={4} />
+            <Tooltip label="Auto Layout">
+              <ActionIcon variant="subtle" aria-label="Auto Layout" onClick={() => handleAutoLayout()}>
+                <IconLayoutAlignLeft size={18} />
               </ActionIcon>
             </Tooltip>
             <Divider orientation="vertical" mx={4} />

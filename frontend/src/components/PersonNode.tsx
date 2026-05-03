@@ -288,13 +288,13 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
         // newNode (right) → current (left): newNode right-source → current left-target
         reactFlow.setEdges((prev) => [
           ...prev,
-          createRelationEdge(newID, id, 'partner', { sourceHandle: 'right-source', targetHandle: 'left-target' }),
+          createRelationEdge(newID, id, 'partner', { sourceHandle: 'bottom-source', targetHandle: 'bottom-target' }),
         ]);
       } else {
         // current (right) → newNode (left)
         reactFlow.setEdges((prev) => [
           ...prev,
-          createRelationEdge(id, newID, 'partner', { sourceHandle: 'right-source', targetHandle: 'left-target' }),
+          createRelationEdge(id, newID, 'partner', { sourceHandle: 'bottom-source', targetHandle: 'bottom-target' }),
         ]);
       }
     } else {
@@ -334,6 +334,13 @@ export function PersonNode({ id, data, selected }: NodeProps<PersonFlowNode>) {
       >
         <span style={plusGlyphStyle}>+</span>
       </Handle>
+
+      <Handle
+        type="target"
+        id="bottom-target"
+        position={Position.Bottom}
+        style={{ ...actionHandleBase, bottom: 0, transform: 'translate(-50%, 50%)', opacity: 0, pointerEvents: 'none' }}
+      />
 
       {/* Left + : click shows sibling menu (add left sibling), drag to connect */}
       <Handle

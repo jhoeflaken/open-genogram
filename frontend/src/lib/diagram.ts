@@ -32,16 +32,18 @@ export function createRelationEdge(
   relation: RelationType = 'parent-child',
   options?: { sourceHandle?: string; targetHandle?: string }
 ): Edge<RelationEdgeData> {
+  const isPartner = relation === 'partner' || relation === 'divorce';
   return {
     id: `${source}-${target}-${relation}-${crypto.randomUUID().slice(0, 6)}`,
     source,
     target,
     sourceHandle: options?.sourceHandle,
     targetHandle: options?.targetHandle,
-    type: relation === 'partner' ? 'straight' : 'smoothstep',
+    type: isPartner ? 'smoothstep' : 'smoothstep',
     style: relationStyle(relation),
     data: { relation },
-    animated: relation === 'adoption'
+    animated: relation === 'adoption',
+    pathOptions: isPartner ? { borderRadius: 40 } : undefined
   };
 }
 
@@ -59,13 +61,15 @@ export function relationStyle(relation: RelationType): CSSProperties {
 }
 
 export function updateEdgeRelation<T extends RelationEdgeData>(edge: Edge<T>, relation: RelationType): Edge<T> {
+  const isPartner = relation === 'partner' || relation === 'divorce';
   return {
     ...edge,
     data: { ...edge.data, relation } as T,
-    type: relation === 'partner' ? 'straight' : 'smoothstep',
+    type: isPartner ? 'smoothstep' : 'smoothstep',
     style: relationStyle(relation),
     markerEnd: undefined,
-    animated: relation === 'adoption'
+    animated: relation === 'adoption',
+    pathOptions: isPartner ? { borderRadius: 40 } : undefined
   };
 }
 
