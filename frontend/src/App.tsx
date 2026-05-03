@@ -94,6 +94,10 @@ export function App() {
   const [isBusy, setIsBusy] = useState(false);
   const [asideCollapsed, setAsideCollapsed] = useState(false);
   const [asideWidth, setAsideWidth] = useState(ASIDE_EXPANDED_WIDTH);
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [printPaperSize, setPrintPaperSize] = useState<'A4' | 'A3' | 'A0'>('A4');
+  const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('landscape');
+  const [printScale, setPrintScale] = useState(1.0);
 
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
   const selectedEdge = useMemo(() => edges.find((e) => e.id === selectedEdgeId) ?? null, [edges, selectedEdgeId]);
@@ -483,61 +487,106 @@ export function App() {
     const wrapperEl = document.querySelector('.flow-wrapper') as HTMLElement | null;
     if (!wrapperEl) { window.print(); return; }
 
-    // Print at a fixed readable zoom (0.9 ≈ full screen node size) so nodes are
-    // legible on paper. The browser will paginate to multiple pages if needed.
-    const PRINT_ZOOM = 0.9;
+    // Paper dimensions in mm
+    const PAPER_SIZES = {
+      A4: { width: 210, height: 297 },
+      A3: { width: 297, height: 420 },
+      A0: { width: 841, height: 1189 },
+    };
 
-    if (allNodes.length > 0) {
-      const bounds = getNodesBounds(allNodes);
-      // Translate so the diagram starts at the top-left with a small margin
-      const tx = (-bounds.x + 20) * PRINT_ZOOM;
-      const ty = (-bounds.y + 20) * PRINT_ZOOM;
-      const vpEl = wrapperEl.querySelector('.react-flow__viewport') as HTMLElement | null;
-      if (vpEl) vpEl.style.transform = `translate(${tx}px,${ty}px) scale(${PRINT_ZOOM})`;
-    }
+    const paperDim = PAPER_SIZES[printPaperSize];
+    const marginMm = 8;
+    const pWmm = printOrientation === 'landscape' ? paperDim.height : paperDim.width;
+    const pHmm = printOrientation === 'landscape' ? paperDim.width : paperDim.height;
 
-    // Snapshot the canvas HTML with the new transform applied
+    // Convert mm to pixels (approx 3.78 px/mm for 96dpi)
+    const pxPerMm = 3.78;
+    const pWpx = Math.floor((pWmm - 2 * marginMm) * pxPerMm);
+    const pHpx = Math.floor((pHmm - 2 * marginMm) * pxPerMm);
+
+    const bounds = allNodes.length > 0 ? getNodesBounds(allNodes) : { x: 0, y: 0, width: 0, height: 0 };
+    const padding = 20;
+    const diagramW = (bounds.width + padding * 2) * printScale;
+    const diagramH = (bounds.height + padding * 2) * printScale;
+
+    const cols = Math.ceil(diagramW / pWpx);
+    const rows = Math.ceil(diagramH / pHpx);
+
+    // Snapshot the canvas HTML
     const canvasHTML = wrapperEl.outerHTML;
 
-    // Restore inline style immediately
-    const vpEl = wrapperEl.querySelector('.react-flow__viewport') as HTMLElement | null;
-    if (vpEl) vpEl.style.transform = '';
-
-    // Collect all styles from the current document
+    // Collect all styles
     const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
       .map((el) => el.outerHTML).join('\n');
     const inlineStyles = Array.from(document.querySelectorAll('style'))
       .map((el) => el.outerHTML).join('\n');
     const rootStyle = document.documentElement.getAttribute('style') ?? '';
 
-    // Compute canvas size at print zoom so the wrapper is tall/wide enough
-    const allBounds = allNodes.length > 0 ? getNodesBounds(allNodes) : null;
-    const canvasW = allBounds ? Math.ceil((allBounds.x + allBounds.width  + 40) * PRINT_ZOOM) : 2400;
-    const canvasH = allBounds ? Math.ceil((allBounds.y + allBounds.height + 40) * PRINT_ZOOM) : 1600;
-
     const printWindow = window.open('', '_blank', 'width=1200,height=900');
     if (!printWindow) { window.print(); return; }
+
+    let pagesHTML = '';
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const tx = (-bounds.x + padding) * printScale - (c * pWpx);
+        const ty = (-bounds.y + padding) * printScale - (r * pHpx);
+
+        pagesHTML += `
+          <div class="page">
+            <div class="flow-container">
+              <div class="flow-wrapper-print" style="transform: translate(${tx}px, ${ty}px) scale(${printScale}); transform-origin: top left;">
+                ${canvasHTML}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
 
     printWindow.document.write(`<!DOCTYPE html>
 <html style="${rootStyle}">
 <head>
   <meta charset="utf-8">
+  <title>Print Diagram</title>
   ${styleLinks}
   ${inlineStyles}
   <style>
     *, *::before, *::after { print-color-adjust: exact; -webkit-print-color-adjust: exact; box-sizing: border-box; }
-    @page { size: A4 landscape; margin: 8mm; }
+    @page { size: ${printPaperSize} ${printOrientation}; margin: 0; }
     html, body { margin: 0; padding: 0; background: #fff; }
-    .flow-wrapper {
-      width: ${canvasW}px !important;
-      height: ${canvasH}px !important;
-      overflow: visible !important;
+    .page {
+      width: ${pWmm}mm;
+      height: ${pHmm}mm;
+      position: relative;
+      overflow: hidden;
+      page-break-after: always;
+      margin: 0;
+      padding: ${marginMm}mm;
     }
+    .flow-container {
+      width: ${pWpx}px;
+      height: ${pHpx}px;
+      position: relative;
+      overflow: hidden;
+    }
+    .flow-wrapper-print {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .flow-wrapper {
+      width: 10000px !important;
+      height: 10000px !important;
+      background: transparent !important;
+    }
+    .react-flow__viewport { transform: none !important; }
     .react-flow, .react-flow__container, .react-flow__renderer, .react-flow__pane { overflow: visible !important; }
     .action-handle, .react-flow__minimap, .react-flow__controls, .react-flow__background { display: none !important; }
   </style>
 </head>
-<body>${canvasHTML}</body>
+<body>${pagesHTML}</body>
 </html>`);
     printWindow.document.close();
 
@@ -547,7 +596,7 @@ export function App() {
     } else {
       printWindow.addEventListener('load', doprint, { once: true });
     }
-  }, [reactFlowInstance]);
+  }, [reactFlowInstance, printPaperSize, printOrientation, printScale]);
 
   const onAsideResizeMouseDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     if (asideCollapsed) return;
@@ -620,7 +669,7 @@ export function App() {
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Print">
-              <ActionIcon variant="subtle" aria-label="Print" onClick={handlePrint}>
+              <ActionIcon variant="subtle" aria-label="Print" onClick={() => setPrintModalOpen(true)}>
                 <IconPrinter size={18} />
               </ActionIcon>
             </Tooltip>
@@ -879,6 +928,73 @@ export function App() {
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setConfigOpen(false)}>Cancel</Button>
             <Button onClick={() => { setDateFormat(configDateFormat); setConfigOpen(false); }}>OK</Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal opened={printModalOpen} onClose={() => setPrintModalOpen(false)} title="Print Diagram" centered>
+        <Stack>
+          <Select
+            label="Paper Size"
+            data={[
+              { value: 'A4', label: 'A4' },
+              { value: 'A3', label: 'A3' },
+              { value: 'A0', label: 'A0' },
+            ]}
+            value={printPaperSize}
+            onChange={(v) => { if (v) setPrintPaperSize(v as any); }}
+          />
+          <Select
+            label="Orientation"
+            data={[
+              { value: 'portrait', label: 'Portrait' },
+              { value: 'landscape', label: 'Landscape' },
+            ]}
+            value={printOrientation}
+            onChange={(v) => { if (v) setPrintOrientation(v as any); }}
+          />
+          <Stack gap={4}>
+            <Text size="sm" fw={500}>Scale</Text>
+            <Group gap="xs">
+              <Button size="compact-xs" variant="outline" onClick={() => setPrintScale(s => Math.max(0.1, s - 0.1))}>-0.1</Button>
+              <Text size="sm" style={{ minWidth: 40, textAlign: 'center' }}>{(printScale * 100).toFixed(0)}%</Text>
+              <Button size="compact-xs" variant="outline" onClick={() => setPrintScale(s => Math.min(2.0, s + 0.1))}>+0.1</Button>
+              <Button size="compact-xs" variant="subtle" onClick={() => setPrintScale(1.0)}>Reset</Button>
+            </Group>
+          </Stack>
+
+          {reactFlowInstance && (
+            <Text size="xs" c="dimmed">
+              {(() => {
+                const PAPER_SIZES = {
+                  A4: { width: 210, height: 297 },
+                  A3: { width: 297, height: 420 },
+                  A0: { width: 841, height: 1189 },
+                };
+                const paperDim = PAPER_SIZES[printPaperSize];
+                const marginMm = 8;
+                const pWmm = printOrientation === 'landscape' ? paperDim.height : paperDim.width;
+                const pHmm = printOrientation === 'landscape' ? paperDim.width : paperDim.height;
+                const pxPerMm = 3.78;
+                const pWpx = Math.floor((pWmm - 2 * marginMm) * pxPerMm);
+                const pHpx = Math.floor((pHmm - 2 * marginMm) * pxPerMm);
+
+                const allNodes = reactFlowInstance.getNodes();
+                const bounds = allNodes.length > 0 ? getNodesBounds(allNodes) : { x: 0, y: 0, width: 0, height: 0 };
+                const padding = 20;
+                const diagramW = (bounds.width + padding * 2) * printScale;
+                const diagramH = (bounds.height + padding * 2) * printScale;
+
+                const cols = Math.ceil(diagramW / pWpx);
+                const rows = Math.ceil(diagramH / pHpx);
+                return `Estimated pages: ${cols * rows} (${cols} x ${rows})`;
+              })()}
+            </Text>
+          )}
+
+          <Group justify="flex-end" mt="xs">
+            <Button variant="default" onClick={() => setPrintModalOpen(false)}>Cancel</Button>
+            <Button onClick={() => { handlePrint(); setPrintModalOpen(false); }}>Print</Button>
           </Group>
         </Stack>
       </Modal>
